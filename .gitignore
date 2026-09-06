@@ -1,0 +1,9 @@
+# 個人資料 —— 絕對不要推上公開 repo
+grind-log-*.json
+*-修正版.csv
+sheet-*.txt
+
+# 本機開發設定
+.claude/
+node_modules/
+dist/

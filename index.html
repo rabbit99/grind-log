@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>練功記錄 — Grind Log</title>
+<style>
+  :root{
+    --stone-900:#131820;
+    --stone-800:#1B2029;
+    --stone-700:#232A35;
+    --rule:#313B4A;
+    --bone:#E7E1D3;
+    --bone-dim:#9AA2AF;
+    --gold:#C9A227;
+    --gold-soft:#8A7220;
+    --crimson:#A8433D;
+    --jade:#4E8C6A;
+    --w1:#C9A227; --w2:#5B8DB8; --w3:#A8433D; --w4:#4E8C6A; --w5:#8E6FB0; --w6:#B87333;
+    --pad:20px;
+    --radius:3px;
+  }
+  *{box-sizing:border-box}
+  /* hidden 屬性必須壓過 .btnrow / .pager 的 display:flex，
+     否則 display 會蓋掉瀏覽器預設的 [hidden]{display:none} */
+  [hidden]{display:none!important}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--stone-900);
+    color:var(--bone);
+    font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC","Hiragino Sans TC",system-ui,sans-serif;
+    font-size:14px;
+    line-height:1.55;
+    font-variant-numeric:tabular-nums;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums}
+  a{color:var(--gold)}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:24px var(--pad) 80px}
+
+  header.top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  header.top h1{font-size:19px;font-weight:600;margin:0;letter-spacing:.04em}
+  header.top .sub{color:var(--bone-dim);font-size:12.5px}
+  header.top .spacer{flex:1}
+
+  /* ---------- hero: experience bar ---------- */
+  .hero{
+    background:var(--stone-800);
+    border:1px solid var(--rule);
+    border-radius:var(--radius);
+    padding:18px var(--pad) 20px;
+    margin-bottom:22px;
+  }
+  .hero-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .hero-lv{font-size:26px;font-weight:600;color:var(--gold);letter-spacing:.02em}
+  .hero-note{color:var(--bone-dim);font-size:12.5px}
+  .bar{
+    position:relative;height:26px;background:#0E1218;
+    border:1px solid var(--rule);border-radius:2px;overflow:hidden;display:flex;
+  }
+  .bar .seg{height:100%;border-right:1px solid rgba(0,0,0,.45)}
+  .bar .ticks{position:absolute;inset:0;pointer-events:none}
+  .bar .ticks i{position:absolute;top:0;bottom:0;width:1px;background:rgba(231,225,211,.13)}
+  .bar-scale{display:flex;justify-content:space-between;color:var(--bone-dim);font-size:11px;margin-top:5px}
+  .stats{display:flex;gap:30px;flex-wrap:wrap;margin-top:18px}
+  .stat .v{font-size:19px;font-weight:600}
+  .stat .k{color:var(--bone-dim);font-size:12px}
+  .stat .v.gold{color:var(--gold)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--bone-dim)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:9px;height:9px;border-radius:1px;display:inline-block}
+
+  /* ---------- layout ---------- */
+  .cols{display:grid;grid-template-columns:320px 1fr;gap:22px;align-items:start}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+
+  .panel{
+    background:var(--stone-800);border:1px solid var(--rule);
+    border-radius:var(--radius);margin-bottom:18px;
+  }
+  .panel > h2{
+    margin:0;padding:12px var(--pad);font-size:13.5px;font-weight:600;
+    border-bottom:1px solid var(--rule);letter-spacing:.03em;
+    display:flex;align-items:center;gap:8px;
+  }
+  .panel > h2 .hint{font-weight:400;color:var(--bone-dim);font-size:12px}
+  .panel .body{padding:14px var(--pad) var(--pad)}
+  /* 黏著的是整個側欄，不是裡面每個面板 —— 各自 sticky 會疊在一起，
+     後面的「檔案」會蓋掉表單的備註欄與送出按鈕。 */
+  .side{
+    position:sticky;top:16px;
+    max-height:calc(100vh - 32px);overflow-y:auto;
+    scrollbar-width:thin;scrollbar-color:var(--rule) transparent;
+  }
+  .side::-webkit-scrollbar{width:8px}
+  .side::-webkit-scrollbar-thumb{background:var(--rule);border-radius:4px}
+  .side::-webkit-scrollbar-thumb:hover{background:var(--gold-soft)}
+  .side > .panel:last-child{margin-bottom:0}
+  @media(max-width:900px){
+    .side{position:static;max-height:none;overflow:visible}
+  }
+
+  /* ---------- form ---------- */
+  .field{margin-bottom:11px}
+  .field label{display:block;font-size:12px;color:var(--bone-dim);margin-bottom:4px}
+  .lblhint{color:var(--gold-soft);font-size:11px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  input,select,textarea{
+    width:100%;background:#0E1218;color:var(--bone);
+    border:1px solid var(--rule);border-radius:2px;
+    padding:7px 9px;font:inherit;font-variant-numeric:tabular-nums;
+  }
+  input:focus,select:focus,textarea:focus,button:focus-visible{
+    outline:2px solid var(--gold);outline-offset:1px;border-color:var(--gold-soft);
+  }
+  button{
+    background:var(--stone-700);color:var(--bone);border:1px solid var(--rule);
+    border-radius:2px;padding:7px 13px;font:inherit;cursor:pointer;
+  }
+  button:hover{border-color:var(--gold-soft)}
+  button.primary{background:var(--gold);color:#171200;border-color:var(--gold);font-weight:600}
+  button.primary:hover{background:#DDB52E}
+  button.ghost{background:transparent}
+  button.danger:hover{border-color:var(--crimson);color:#E39A96}
+  button.sm{padding:3px 8px;font-size:12px}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .msg{font-size:12.5px;margin-top:9px;min-height:1.2em}
+  .msg.err{color:#E39A96}
+  .msg.ok{color:var(--jade)}
+
+  /* ---------- tables ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px 9px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+  th{color:var(--bone-dim);font-weight:500;font-size:11.5px;border-bottom-color:#3D4859}
+  th:first-child,td:first-child{text-align:left}
+  td.tl,th.tl{text-align:left}
+  tbody tr:hover{background:rgba(201,162,39,.055)}
+  .scroll{overflow-x:auto}
+  .who{display:inline-flex;align-items:center;gap:6px}
+  .who i{width:8px;height:8px;border-radius:1px;flex:none}
+  .est{color:var(--crimson);font-size:11px;margin-left:4px}
+  td.bh{color:var(--bone-dim)}
+  td.bh.adj{color:var(--gold);font-weight:600}
+  .rowact{opacity:0;transition:opacity .12s}
+  tr:hover .rowact,.rowact:focus-within{opacity:1}
+  tfoot td{font-weight:600;border-top:1px solid #3D4859;border-bottom:none}
+  .empty{padding:26px var(--pad);color:var(--bone-dim);font-size:13px}
+
+  /* ---------- 啟用勾選 ---------- */
+  th.cb,td.cb{text-align:center;width:1%;padding-left:12px;padding-right:6px}
+  th.cb input,td.cb input{width:auto;padding:0;margin:0;cursor:pointer;accent-color:var(--gold)}
+  th.cb .allcb{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  th.cb .allcb:hover{color:var(--bone)}
+  tr.off td{opacity:.34}
+  tr.off td.cb{opacity:1}
+  tr.off:hover td{opacity:.55}
+  tr.off:hover td.cb{opacity:1}
+
+/* ---------- 分頁 ---------- */
+  .pager{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    padding:11px var(--pad);border-top:1px solid var(--rule);
+  }
+  .pager .pgsize{display:flex;align-items:center;gap:7px;color:var(--bone-dim);font-size:12.5px}
+  .pager .pgsize select{width:auto;padding:4px 7px;font-size:12.5px}
+  .pgrange{color:var(--bone-dim);font-size:12px;margin-left:4px}
+  .pglinks{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .pglinks button{padding:3px 9px;font-size:12.5px;min-width:32px}
+  .pglinks button.on{background:var(--gold);color:#171200;border-color:var(--gold);font-weight:600}
+  .pglinks button:disabled{opacity:.35;cursor:default}
+  .pglinks button:disabled:hover{border-color:var(--rule)}
+  .pglinks .gap{color:var(--bone-dim);padding:0 3px;font-size:12.5px}
+  .best{color:var(--jade)}
+  .worst{color:var(--crimson)}
+
+  details.tool{border-top:1px solid var(--rule)}
+  details.tool summary{
+    padding:10px var(--pad);cursor:pointer;font-size:13px;color:var(--bone-dim);
+    list-style:none;display:flex;align-items:center;gap:7px;
+  }
+  details.tool summary::-webkit-details-marker{display:none}
+  details.tool summary::before{content:"▸";font-size:11px}
+  details.tool[open] summary::before{content:"▾"}
+  details.tool summary:hover{color:var(--bone)}
+  details.tool .body{padding:0 var(--pad) var(--pad)}
+
+  .foot{color:var(--bone-dim);font-size:12px;margin-top:26px;line-height:1.7}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1 id="docTitle">練功記錄</h1>
+    <span class="sub">效率以每小時經驗為準，%數會隨等級縮水</span>
+    <span class="spacer"></span>
+    <span class="sub" id="saveState"></span>
+  </header>
+
+  <!-- hero -->
+  <section class="hero">
+    <div class="hero-head">
+      <span class="hero-lv" id="heroLv">—</span>
+      <span class="hero-note" id="heroNote"></span>
+    </div>
+    <div class="bar" id="heroBar"><div class="ticks" id="heroTicks"></div></div>
+    <div class="bar-scale"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+    <div class="stats" id="heroStats"></div>
+    <div class="legend" id="heroLegend"></div>
+  </section>
+
+  <div class="cols">
+    <!-- left -->
+    <div class="side">
+      <section class="panel">
+        <h2>記一筆時段</h2>
+        <div class="body">
+          <div class="field">
+            <label for="f-date">日期</label>
+            <input type="date" id="f-date">
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="f-start">起（時）</label>
+              <input type="number" id="f-start" step="0.5" min="0" max="24" placeholder="23">
+            </div>
+            <div class="field">
+              <label for="f-end">迄（時）</label>
+              <input type="number" id="f-end" step="0.5" min="0" max="24" placeholder="5">
+            </div>
+          </div>
+          <div class="field">
+            <label for="f-worker">人員</label>
+            <select id="f-worker"></select>
+          </div>
+          <div class="field" id="f-bh-wrap" hidden>
+            <label for="f-bh">計費時數 <span class="lblhint">休息不算，空白＝同時段</span></label>
+            <input type="number" id="f-bh" step="0.5" min="0" placeholder="">
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="f-level">等級</label>
+              <input type="number" id="f-level" step="1" placeholder="53">
+            </div>
+            <div class="field">
+              <label for="f-pct">獲得 %</label>
+              <input type="number" id="f-pct" step="0.1" placeholder="8">
+            </div>
+          </div>
+          <div class="field">
+            <label for="f-note">備註</label>
+            <input type="text" id="f-note" placeholder="象4、掉趴一次…">
+          </div>
+          <div class="btnrow">
+            <button class="primary" id="btnSave">新增記錄</button>
+            <button class="ghost" id="btnCancel" hidden>取消編輯</button>
+          </div>
+          <div class="msg" id="formMsg"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>檔案</h2>
+        <div class="body">
+          <div class="btnrow" style="margin-top:0">
+            <button id="btnExport">匯出 JSON</button>
+            <button id="btnCsv">匯出 CSV</button>
+            <button id="btnImport">匯入 JSON</button>
+          </div>
+          <div class="btnrow" id="nativeRow" hidden>
+            <button id="btnOpenFile">開啟檔案</button>
+            <button id="btnSaveFile">儲存到檔案</button>
+          </div>
+          <div class="btnrow">
+            <button class="ghost danger" id="btnReset">清空全部</button>
+          </div>
+          <input type="file" id="fileInput" accept="application/json" hidden>
+          <div class="msg" id="ioMsg"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- right -->
+    <div class="main">
+      <section class="panel">
+        <h2>人員效率 <span class="hint">每百萬經驗成本是跨等級唯一可比的價格</span></h2>
+        <div class="scroll">
+          <table id="tblWorkers">
+            <thead><tr>
+              <th class="tl">人員</th><th>時數</th><th>獲得%</th><th>獲得經驗</th>
+              <th>每小時經驗</th><th>每小時%</th><th>費用</th><th>每百萬經驗成本</th>
+            </tr></thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>記錄 <span class="hint" id="sessCount"></span></h2>
+        <div class="scroll">
+          <table id="tblSessions">
+            <thead><tr>
+              <th class="cb"><label class="allcb" title="勾選或取消這一頁的全部記錄"><input type="checkbox" id="pgAll">啟用</label></th>
+              <th class="tl">日期</th><th class="tl">星期</th><th class="tl">時段</th><th>時數</th><th title="實際計費／有效時數，休息時間不算">計費</th>
+              <th class="tl">人員</th><th>等級</th><th>獲得%</th>
+              <th>每小時經驗</th><th>每小時%</th><th>費用</th><th class="tl">備註</th><th></th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="pager" id="sessPager" hidden>
+          <div class="pgsize">
+            每頁
+            <select id="pgSize">
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </select>
+            筆
+            <span class="pgrange" id="pgRange"></span>
+          </div>
+          <div class="pglinks" id="pgLinks"></div>
+        </div>
+        <div class="empty" id="sessEmpty" hidden>還沒有記錄。左邊填一筆時段就會開始統計。</div>
+      </section>
+
+      <section class="panel">
+        <details class="tool">
+          <summary>人員與時薪</summary>
+          <div class="body">
+            <div class="scroll">
+              <table id="tblWorkerEdit">
+                <thead><tr><th class="tl">名稱</th><th>時薪</th><th>計費</th><th class="tl">備註</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="btnrow"><button class="sm" id="btnAddWorker">新增人員</button></div>
+          </div>
+        </details>
+        <details class="tool">
+          <summary>等級經驗對照表</summary>
+          <div class="body">
+            <div class="scroll">
+              <table id="tblLevels">
+                <thead><tr><th class="tl">等級</th><th>升下一等經驗</th><th class="tl">可信度</th><th class="tl">備註</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="btnrow"><button class="sm" id="btnAddLevel">新增等級</button></div>
+          </div>
+        </details>
+      </section>
+
+      <p class="foot">
+        每小時經驗 = 獲得% ÷ 100 × 該等級升級經驗 ÷ 時數。<br>
+        時段跨午夜直接填（23 到 5），時數會算成 6。中途升級請拆成兩筆分別填等級。<br>
+        紅字等級為推估值，覆蓋成實測值後所有歷史記錄會一起修正。
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const WCOLORS = ["var(--w1)","var(--w2)","var(--w3)","var(--w4)","var(--w5)","var(--w6)"];
+const STORE_KEY = "grind-log/v1";
+const WEEK = ["週日","週一","週二","週三","週四","週五","週六"];
+
+/* ---------- seed data ---------- */
+function seed(){
+  const L = [
+    [41,34761905,"measured"],[42,36500000,"measured"],[43,36608696,"measured"],
+    [44,37541667,"measured"],[45,40555556,"measured"],[46,40555556,"measured"],
+    [47,41764114,"measured"],[48,44074074,"measured"],[49,45769231,"measured"],
+    [50,50638298,"measured"],[51,55348837,"measured"],[52,61025641,"measured"],
+    [53,67128205,"estimated"],[54,402769230,"estimated"]
+  ];
+  // 示範資料。要放自己的記錄，用「匯入 JSON」載入，或直接改這裡。
+  const S = [
+    {date:"2026-09-01", start:7,  end:10, workerId:"me",   level:51, gainedPct:2},
+    {date:"2026-09-01", start:10, end:18, workerId:"hire", level:51, gainedPct:9,
+     billableHours:7, note:"時段 8 小時，中間休息 1 小時不計費"},
+    {date:"2026-09-01", start:18, end:24, workerId:"me",   level:51, gainedPct:5},
+    {date:"2026-09-02", start:7,  end:10, workerId:"me",   level:51, gainedPct:2.5, note:"維修延長"},
+    {date:"2026-09-02", start:10, end:18, workerId:"hire", level:51, gainedPct:9, billableHours:7},
+    {date:"2026-09-02", start:23, end:5,  workerId:"me",   level:51, gainedPct:4,
+     note:"跨午夜直接填 23 到 5，時數自動算 6"},
+    {date:"2026-09-03", start:10, end:18, workerId:"hire", level:51, gainedPct:8.5, billableHours:7},
+    {date:"2026-09-03", start:18, end:24, workerId:"me",   level:51, gainedPct:3,
+     enabled:false, note:"示範：取消「啟用」就不列入統計"}
+  ];
+  return {
+    schema:"grind-log/v1",
+    meta:{title:"天堂經典版 練功記錄",unit:"exp",currency:"TWD",updatedAt:new Date().toISOString()},
+    levels:L.map(([level,required,confidence])=>({level,required,confidence,note:confidence==="estimated"?(level===54?"鬼魂比值 x6":"x1.10 外推"):""})),
+    workers:[
+      {id:"me",   name:"我",   hourlyRate:0,   billable:false, note:"自己練，不計費"},
+      {id:"hire", name:"代練", hourlyRate:200, billable:true,  note:"日薪1600÷8h"}
+    ],
+    sessions:S.map((s,i)=>Object.assign({id:"s"+(i+1), billableHours:null, enabled:true, note:""}, s))
+  };
+}
+
+/* ---------- state ---------- */
+let db = load();
+let editingId = null;
+
+/* 分頁狀態：只是 UI 偏好，跟資料分開存 */
+const UI_KEY = STORE_KEY + ":ui";
+let page = 1;
+let pageSize = 20;
+let focusId = null;          // 新增後要跳到那一筆所在的頁
+try{
+  const ui = JSON.parse(localStorage.getItem(UI_KEY) || "{}");
+  if([10,20,50].includes(+ui.pageSize)) pageSize = +ui.pageSize;
+}catch(e){}
+function persistUI(){ try{ localStorage.setItem(UI_KEY, JSON.stringify({pageSize})); }catch(e){} }
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return normalize(JSON.parse(raw));
+  }catch(e){ console.warn("讀取失敗，改用預設資料", e); }
+  return normalize(seed());
+}
+function normalize(d){
+  d = d || {};
+  d.schema = d.schema || "grind-log/v1";
+  d.meta = Object.assign({title:"練功記錄",unit:"exp",currency:"TWD"}, d.meta||{});
+  d.levels = Array.isArray(d.levels)? d.levels : [];
+  d.workers = Array.isArray(d.workers)? d.workers : [];
+  d.sessions = Array.isArray(d.sessions)? d.sessions : [];
+  // 沒有 enabled 欄位的一律視為啟用（舊檔匯入、種子資料都走這裡）
+  d.sessions.forEach(s=>{
+    s.enabled = s.enabled !== false;
+    // 計費時數：空值代表「跟時段一樣」，不寫死成數字，時段改了才會跟著動
+    const b = s.billableHours;
+    s.billableHours = (b===null||b===undefined||b===""||!isFinite(+b)||+b<0) ? null : +b;
+  });
+  return d;
+}
+function persist(){
+  db.meta.updatedAt = new Date().toISOString();
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify(db));
+    setSaveState("已存到這台電腦");
+  }catch(e){
+    setSaveState("無法自動儲存，請用「匯出 JSON」保留資料");
+  }
+}
+let saveTimer;
+function setSaveState(t){
+  const el = document.getElementById("saveState");
+  el.textContent = t;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{ el.textContent=""; }, 2200);
+}
+
+/* ---------- derive ---------- */
+const num = n => Number(n);
+function hoursOf(s){
+  const a = num(s.start), b = num(s.end);
+  if(!isFinite(a)||!isFinite(b)) return 0;
+  return b >= a ? b - a : b + 24 - a;
+}
+/* 實際計費／有效時數。真人代練的時段含休息，休息既不計費也不產經驗，
+   所以費用和效率都用這個數字，不是用時段長度。沒填就等於時段長度。 */
+function billHoursOf(s){
+  const b = s.billableHours;
+  return (b===null||b===undefined||b==="") ? hoursOf(s) : num(b);
+}
+function levelInfo(lv){ return db.levels.find(l=>num(l.level)===num(lv)) || null; }
+function workerOf(id){ return db.workers.find(w=>w.id===id) || null; }
+function colorOf(id){
+  const i = db.workers.findIndex(w=>w.id===id);
+  return i<0 ? "var(--bone-dim)" : WCOLORS[i % WCOLORS.length];
+}
+function derive(s){
+  const h = hoursOf(s);
+  const bh = billHoursOf(s);
+  const li = levelInfo(s.level);
+  const req = li ? num(li.required) : 0;
+  const units = req ? num(s.gainedPct)/100*req : 0;
+  const w = workerOf(s.workerId);
+  const rate = w && w.billable ? num(w.hourlyRate)||0 : 0;
+  const cost = bh * rate;
+  return {
+    hours:h, billHours:bh, adjusted: bh!==h, required:req, units,
+    unitsPerHour: bh>0 ? units/bh : 0,
+    pctPerHour: bh>0 ? num(s.gainedPct)/bh : 0,
+    cost,
+    costPerMUnit: units>0 ? cost/(units/1e6) : 0,
+    estimated: li ? li.confidence==="estimated" : false,
+    worker:w
+  };
+}
+function sorted(){
+  return db.sessions.slice().sort((a,b)=>
+    (a.date===b.date) ? num(a.start)-num(b.start) : (a.date<b.date?-1:1));
+}
+/* 只有勾了「啟用」的記錄才列入統計 */
+const isOn = s => s.enabled !== false;
+function activeSorted(){ return sorted().filter(isOn); }
+
+/* ---------- format ---------- */
+const fmt0 = n => (isFinite(n)?Math.round(n):0).toLocaleString("en-US");
+const fmt1 = n => (isFinite(n)?n:0).toLocaleString("en-US",{minimumFractionDigits:1,maximumFractionDigits:1});
+const fmt2 = n => (isFinite(n)?n:0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt3 = n => (isFinite(n)?n:0).toLocaleString("en-US",{minimumFractionDigits:3,maximumFractionDigits:3});
+function weekday(d){ const t=new Date(d+"T00:00:00"); return isNaN(t)?"":WEEK[t.getDay()]; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function hhmm(v){
+  const n = num(v); if(!isFinite(n)) return "";
+  const h = Math.floor(n), m = Math.round((n-h)*60);
+  return m ? `${h}:${String(m).padStart(2,"0")}` : String(h);
+}
+
+/* ---------- render ---------- */
+function render(){
+  document.getElementById("docTitle").textContent = db.meta.title || "練功記錄";
+  renderHero(); renderWorkers(); renderSessions();
+  renderWorkerEdit(); renderLevels(); fillWorkerSelect();
+}
+
+function renderHero(){
+  const all = activeSorted();
+  const bar = document.getElementById("heroBar");
+  const stats = document.getElementById("heroStats");
+  const legend = document.getElementById("heroLegend");
+  bar.querySelectorAll(".seg").forEach(e=>e.remove());
+
+  if(!all.length){
+    document.getElementById("heroLv").textContent = "—";
+    document.getElementById("heroNote").textContent =
+      db.sessions.length ? "所有記錄都取消啟用了" : "尚無記錄";
+    stats.innerHTML = ""; legend.innerHTML = "";
+    return;
+  }
+  const lv = num(all[all.length-1].level);
+  const cur = all.filter(s=>num(s.level)===lv);
+  const li = levelInfo(lv);
+  let acc = 0;
+  const frag = document.createDocumentFragment();
+  cur.forEach(s=>{
+    const p = Math.max(0, num(s.gainedPct));
+    const d = document.createElement("div");
+    d.className = "seg";
+    d.style.width = Math.min(p,100)+"%";
+    d.style.background = colorOf(s.workerId);
+    d.title = `${s.date} ${hhmm(s.start)}–${hhmm(s.end)}　${workerOf(s.workerId)?.name||"?"}　+${p}%`;
+    frag.appendChild(d);
+    acc += p;
+  });
+  bar.appendChild(frag);
+
+  const ticks = document.getElementById("heroTicks");
+  ticks.innerHTML = "";
+  [25,50,75].forEach(p=>{ const i=document.createElement("i"); i.style.left=p+"%"; ticks.appendChild(i); });
+
+  document.getElementById("heroLv").textContent = "Lv " + lv;
+  document.getElementById("heroNote").textContent =
+    `本級已累積 ${fmt1(acc)}%　·　${li? (li.confidence==="estimated"?"升級經驗為推估值 ":"") + fmt0(li.required)+" exp" : "尚未登錄此等級經驗"}`;
+
+  const dv = cur.map(derive);
+  const th = dv.reduce((a,d)=>a+d.billHours,0);
+  const tu = dv.reduce((a,d)=>a+d.units,0);
+  const tc = dv.reduce((a,d)=>a+d.cost,0);
+  const allDv = all.map(derive);
+  stats.innerHTML = [
+    ["本級時速", fmt0(th? tu/th:0), "exp/hr", true],
+    ["本級投入", fmt1(th), "小時", false],
+    ["本級花費", fmt0(tc), db.meta.currency||"", false],
+    ["累計花費", fmt0(allDv.reduce((a,d)=>a+d.cost,0)), db.meta.currency||"", false]
+  ].map(([k,v,u,gold])=>
+    `<div class="stat"><div class="v${gold?" gold":""}">${v} <span style="font-size:12px;font-weight:400;color:var(--bone-dim)">${u}</span></div><div class="k">${k}</div></div>`
+  ).join("");
+
+  const used = [...new Set(cur.map(s=>s.workerId))];
+  legend.innerHTML = used.map(id=>
+    `<span><i style="background:${colorOf(id)}"></i>${esc(workerOf(id)?.name||id)}</span>`).join("");
+}
+
+function renderWorkers(){
+  const tb = document.querySelector("#tblWorkers tbody");
+  const tf = document.querySelector("#tblWorkers tfoot");
+  const act = db.sessions.filter(isOn);
+  const rows = db.workers.map(w=>{
+    const mine = act.filter(s=>s.workerId===w.id);
+    const ss = mine.map(derive);
+    const hours = ss.reduce((a,d)=>a+d.billHours,0);
+    const pct   = mine.reduce((a,s)=>a+num(s.gainedPct),0);
+    const units = ss.reduce((a,d)=>a+d.units,0);
+    const cost  = ss.reduce((a,d)=>a+d.cost,0);
+    return {w,hours,pct,units,cost,
+      uph: hours? units/hours : 0,
+      pph: hours? pct/hours : 0,
+      cpm: units? cost/(units/1e6) : 0};
+  }).filter(r=>r.hours>0);
+
+  if(!rows.length){ tb.innerHTML = `<tr><td colspan="8" style="text-align:left;color:var(--bone-dim)">尚無資料</td></tr>`; tf.innerHTML=""; return; }
+
+  const paid = rows.filter(r=>r.cpm>0);
+  const bestCpm = paid.length? Math.min(...paid.map(r=>r.cpm)) : null;
+  const worstCpm = paid.length? Math.max(...paid.map(r=>r.cpm)) : null;
+  const bestUph = Math.max(...rows.map(r=>r.uph));
+
+  tb.innerHTML = rows.map(r=>`
+    <tr>
+      <td class="tl"><span class="who"><i style="background:${colorOf(r.w.id)}"></i>${esc(r.w.name)}</span></td>
+      <td>${fmt1(r.hours)}</td>
+      <td>${fmt1(r.pct)}</td>
+      <td>${fmt0(r.units)}</td>
+      <td class="${r.uph===bestUph?"best":""}">${fmt0(r.uph)}</td>
+      <td>${fmt3(r.pph)}</td>
+      <td>${fmt0(r.cost)}</td>
+      <td class="${r.cpm&&r.cpm===bestCpm?"best":(r.cpm&&r.cpm===worstCpm?"worst":"")}">${r.cpm?fmt0(r.cpm):"—"}</td>
+    </tr>`).join("");
+
+  const H=rows.reduce((a,r)=>a+r.hours,0), P=rows.reduce((a,r)=>a+r.pct,0),
+        U=rows.reduce((a,r)=>a+r.units,0), C=rows.reduce((a,r)=>a+r.cost,0);
+  tf.innerHTML = `<tr>
+    <td class="tl">合計</td><td>${fmt1(H)}</td><td>${fmt1(P)}</td><td>${fmt0(U)}</td>
+    <td>${fmt0(H?U/H:0)}</td><td>${fmt3(H?P/H:0)}</td><td>${fmt0(C)}</td>
+    <td>${U?fmt0(C/(U/1e6)):"—"}</td></tr>`;
+}
+
+function renderSessions(){
+  const tb = document.querySelector("#tblSessions tbody");
+  const all = sorted();
+  const off = all.length - all.filter(isOn).length;
+
+  document.getElementById("sessCount").textContent =
+    all.length ? (off ? `${all.length} 筆・停用 ${off}` : `${all.length} 筆`) : "";
+  document.getElementById("sessEmpty").hidden = all.length>0;
+
+  const pages = Math.max(1, Math.ceil(all.length/pageSize));
+  // 剛新增的那筆在第幾頁，就翻到第幾頁
+  if(focusId){
+    const i = all.findIndex(s=>s.id===focusId);
+    if(i>=0) page = Math.floor(i/pageSize)+1;
+    focusId = null;
+  }
+  page = Math.min(Math.max(1,page), pages);
+
+  const from = (page-1)*pageSize;
+  const slice = all.slice(from, from+pageSize);
+
+  tb.innerHTML = slice.map(s=>{
+    const d = derive(s);
+    const on = isOn(s);
+    return `<tr class="${on?"":"off"}">
+      <td class="cb"><input type="checkbox" data-on="${s.id}"${on?" checked":""} title="${on?"列入統計":"不列入統計"}"></td>
+      <td class="tl">${esc(s.date)}</td>
+      <td class="tl">${weekday(s.date)}</td>
+      <td class="tl">${hhmm(s.start)}–${hhmm(s.end)}</td>
+      <td>${fmt1(d.hours)}</td>
+      <td class="bh${d.adjusted?' adj':''}"${d.adjusted?` title="時段 ${fmt1(d.hours)}H，扣掉休息實際計費 ${fmt1(d.billHours)}H"`:''}>${fmt1(d.billHours)}</td>
+      <td class="tl"><span class="who"><i style="background:${colorOf(s.workerId)}"></i>${esc(d.worker?d.worker.name:"?")}</span></td>
+      <td>${esc(s.level)}${d.estimated?'<span class="est" title="該等級經驗為推估值">推</span>':""}</td>
+      <td>${fmt1(s.gainedPct)}</td>
+      <td>${d.required?fmt0(d.unitsPerHour):'<span style="color:var(--crimson)">未登錄</span>'}</td>
+      <td>${fmt3(d.pctPerHour)}</td>
+      <td>${fmt0(d.cost)}</td>
+      <td class="tl" style="white-space:normal;max-width:180px">${esc(s.note||"")}</td>
+      <td><span class="rowact">
+        <button class="sm ghost" data-edit="${s.id}">改</button>
+        <button class="sm ghost danger" data-del="${s.id}">刪</button>
+      </span></td>
+    </tr>`;
+  }).join("");
+
+  syncAllCb(slice);
+  renderPager(all.length, pages, from, slice.length);
+}
+
+/* 表頭勾選框反映這一頁的狀態：全開=勾、全關=空、混合=半格 */
+function syncAllCb(slice){
+  const cb = document.getElementById("pgAll");
+  const on = slice.filter(isOn).length;
+  cb.disabled = slice.length === 0;
+  cb.checked = slice.length>0 && on===slice.length;
+  cb.indeterminate = on>0 && on<slice.length;
+  cb.closest(".allcb").title = slice.length
+    ? (on===slice.length ? "取消這一頁全部 "+slice.length+" 筆"
+                         : "啟用這一頁全部 "+slice.length+" 筆")
+    : "";
+}
+
+/* 頁碼：頁數多的時候用「1 … 5 6 7 … 15」的形式 */
+function pageList(total, cur){
+  if(total<=7) return Array.from({length:total},(_,i)=>i+1);
+  let a = Math.max(2, cur-1), b = Math.min(total-1, cur+1);
+  if(cur<=3){ a=2; b=4; }
+  if(cur>=total-2){ a=total-3; b=total-1; }
+  const out=[1];
+  if(a>2) out.push("…");
+  for(let i=a;i<=b;i++) out.push(i);
+  if(b<total-1) out.push("…");
+  out.push(total);
+  return out;
+}
+
+function renderPager(count, pages, from, shown){
+  const wrap = document.getElementById("sessPager");
+  wrap.hidden = count === 0;
+  if(!count) return;
+
+  document.getElementById("pgSize").value = String(pageSize);
+  document.getElementById("pgRange").textContent =
+    pages>1 ? `第 ${from+1}–${from+shown} 筆，共 ${count} 筆` : `共 ${count} 筆`;
+
+  const links = document.getElementById("pgLinks");
+  if(pages<=1){ links.innerHTML=""; return; }
+  links.innerHTML =
+    `<button data-pg="${page-1}"${page<=1?" disabled":""} title="上一頁">‹</button>` +
+    pageList(pages, page).map(p =>
+      p==="…" ? '<span class="gap">…</span>'
+              : `<button data-pg="${p}" class="${p===page?"on":""}">${p}</button>`
+    ).join("") +
+    `<button data-pg="${page+1}"${page>=pages?" disabled":""} title="下一頁">›</button>`;
+}
+
+function renderWorkerEdit(){
+  const tb = document.querySelector("#tblWorkerEdit tbody");
+  tb.innerHTML = db.workers.map(w=>`
+    <tr>
+      <td class="tl"><input data-w="${w.id}" data-k="name" value="${esc(w.name)}" style="width:120px"></td>
+      <td><input data-w="${w.id}" data-k="hourlyRate" type="number" step="0.5" value="${w.hourlyRate}" style="width:90px"></td>
+      <td><input data-w="${w.id}" data-k="billable" type="checkbox" ${w.billable?"checked":""} style="width:auto"></td>
+      <td class="tl"><input data-w="${w.id}" data-k="note" value="${esc(w.note||"")}" style="width:150px"></td>
+      <td><button class="sm ghost danger" data-delw="${w.id}">刪</button></td>
+    </tr>`).join("");
+}
+
+function renderLevels(){
+  const tb = document.querySelector("#tblLevels tbody");
+  tb.innerHTML = db.levels.slice().sort((a,b)=>a.level-b.level).map(l=>`
+    <tr>
+      <td class="tl"><input data-l="${l.level}" data-k="level" type="number" value="${l.level}" style="width:70px"></td>
+      <td><input data-l="${l.level}" data-k="required" type="number" value="${l.required}" style="width:130px"></td>
+      <td class="tl">
+        <select data-l="${l.level}" data-k="confidence" style="width:90px">
+          <option value="measured"${l.confidence!=="estimated"?" selected":""}>實測</option>
+          <option value="estimated"${l.confidence==="estimated"?" selected":""}>推估</option>
+        </select>
+      </td>
+      <td class="tl"><input data-l="${l.level}" data-k="note" value="${esc(l.note||"")}" style="width:140px"></td>
+      <td><button class="sm ghost danger" data-dell="${l.level}">刪</button></td>
+    </tr>`).join("");
+}
+
+/* 計費時數只對「計費」的人員有意義，其他人隱藏這一欄 */
+function syncBhField(){
+  const w = workerOf(document.getElementById("f-worker").value);
+  const wrap = document.getElementById("f-bh-wrap");
+  const show = !!(w && w.billable);
+  wrap.hidden = !show;
+  if(!show){ document.getElementById("f-bh").value = ""; return; }
+  const a = parseFloat(document.getElementById("f-start").value);
+  const b = parseFloat(document.getElementById("f-end").value);
+  const span = (isFinite(a)&&isFinite(b)) ? (b>=a ? b-a : b+24-a) : null;
+  document.getElementById("f-bh").placeholder = span===null ? "同時段" : fmt1(span);
+}
+document.getElementById("f-worker").addEventListener("change", syncBhField);
+document.getElementById("f-start").addEventListener("input", syncBhField);
+document.getElementById("f-end").addEventListener("input", syncBhField);
+
+function fillWorkerSelect(){
+  const sel = document.getElementById("f-worker");
+  const keep = sel.value;
+  sel.innerHTML = db.workers.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join("");
+  if(keep && db.workers.some(w=>w.id===keep)) sel.value = keep;
+  syncBhField();
+}
+
+/* ---------- form ---------- */
+function formMsg(t, cls){
+  const el = document.getElementById("formMsg");
+  el.textContent = t || ""; el.className = "msg" + (cls? " "+cls : "");
+}
+function readForm(){
+  return {
+    date: document.getElementById("f-date").value,
+    start: parseFloat(document.getElementById("f-start").value),
+    end: parseFloat(document.getElementById("f-end").value),
+    workerId: document.getElementById("f-worker").value,
+    level: parseInt(document.getElementById("f-level").value,10),
+    gainedPct: parseFloat(document.getElementById("f-pct").value),
+    billableHours: (v=>v===""?null:(isFinite(parseFloat(v))?parseFloat(v):null))(document.getElementById("f-bh").value.trim()),
+    note: document.getElementById("f-note").value.trim()
+  };
+}
+function validate(v){
+  if(!v.date) return "選一個日期";
+  if(!isFinite(v.start)||!isFinite(v.end)) return "填起迄時間";
+  if(v.start===v.end) return "起迄時間不能相同";
+  if(!v.workerId) return "先在下方「人員與時薪」新增人員";
+  if(!isFinite(v.level)) return "填等級";
+  if(!isFinite(v.gainedPct)) return "填獲得 %";
+  if(v.billableHours!==null && v.billableHours<0) return "計費時數不能是負的";
+  return null;
+}
+document.getElementById("btnSave").addEventListener("click", ()=>{
+  const v = readForm();
+  const err = validate(v);
+  if(err){ formMsg(err,"err"); return; }
+  if(editingId){
+    const s = db.sessions.find(x=>x.id===editingId);
+    Object.assign(s, v);
+    editingId = null;
+    document.getElementById("btnSave").textContent = "新增記錄";
+    document.getElementById("btnCancel").hidden = true;
+    formMsg("已更新","ok");
+  }else{
+    const nid = "s"+Date.now();
+    db.sessions.push(Object.assign({id:nid, enabled:true}, v));
+    focusId = nid;
+    if(!levelInfo(v.level)) formMsg(`已新增。等級 ${v.level} 還沒登錄經驗，到下方對照表補上才算得出時速`,"err");
+    else formMsg("已新增","ok");
+  }
+  document.getElementById("f-pct").value = "";
+  document.getElementById("f-bh").value = "";
+  document.getElementById("f-note").value = "";
+  persist(); render();
+});
+document.getElementById("btnCancel").addEventListener("click", ()=>{
+  editingId = null;
+  document.getElementById("btnSave").textContent = "新增記錄";
+  document.getElementById("btnCancel").hidden = true;
+  formMsg("");
+});
+
+document.querySelector("#tblSessions tbody").addEventListener("change", e=>{
+  const cb = e.target.closest("[data-on]"); if(!cb) return;
+  const s = db.sessions.find(x=>x.id===cb.dataset.on); if(!s) return;
+  s.enabled = cb.checked;
+  persist(); render();
+});
+
+document.querySelector("#tblSessions tbody").addEventListener("click", e=>{
+  const del = e.target.closest("[data-del]"), ed = e.target.closest("[data-edit]");
+  if(del){
+    db.sessions = db.sessions.filter(s=>s.id!==del.dataset.del);
+    persist(); render(); return;
+  }
+  if(ed){
+    const s = db.sessions.find(x=>x.id===ed.dataset.edit);
+    if(!s) return;
+    editingId = s.id;
+    document.getElementById("f-date").value = s.date;
+    document.getElementById("f-start").value = s.start;
+    document.getElementById("f-end").value = s.end;
+    document.getElementById("f-worker").value = s.workerId;
+    document.getElementById("f-level").value = s.level;
+    document.getElementById("f-pct").value = s.gainedPct;
+    document.getElementById("f-bh").value = (s.billableHours===null||s.billableHours===undefined)?"":s.billableHours;
+    document.getElementById("f-note").value = s.note||"";
+    syncBhField();
+    document.getElementById("btnSave").textContent = "儲存修改";
+    document.getElementById("btnCancel").hidden = false;
+    formMsg("編輯中","ok");
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+});
+
+/* 表頭勾選框：一次開關這一頁的全部記錄 */
+document.getElementById("pgAll").addEventListener("change", e=>{
+  const from = (page-1)*pageSize;
+  const ids = new Set(sorted().slice(from, from+pageSize).map(s=>s.id));
+  const val = e.target.checked;
+  db.sessions.forEach(s=>{ if(ids.has(s.id)) s.enabled = val; });
+  persist(); render();
+});
+
+/* ---------- 分頁 ---------- */
+document.getElementById("pgSize").addEventListener("change", e=>{
+  const n = parseInt(e.target.value,10);
+  if(![10,20,50].includes(n)) return;
+  // 換每頁筆數時，盡量停在原本看到的那一筆附近
+  const first = (page-1)*pageSize;
+  pageSize = n;
+  page = Math.floor(first/pageSize)+1;
+  persistUI(); render();
+});
+document.getElementById("pgLinks").addEventListener("click", e=>{
+  const b = e.target.closest("[data-pg]"); if(!b || b.disabled) return;
+  const p = parseInt(b.dataset.pg,10);
+  if(!isFinite(p)) return;
+  page = p; render();
+  document.getElementById("tblSessions").scrollIntoView({block:"nearest",behavior:"smooth"});
+});
+
+/* ---------- inline editors ---------- */
+document.querySelector("#tblWorkerEdit").addEventListener("change", e=>{
+  const t = e.target;
+  if(t.dataset.w){
+    const w = workerOf(t.dataset.w); if(!w) return;
+    const k = t.dataset.k;
+    w[k] = (k==="billable") ? t.checked : (k==="hourlyRate" ? parseFloat(t.value)||0 : t.value);
+    persist(); render();
+  }
+});
+document.querySelector("#tblWorkerEdit").addEventListener("click", e=>{
+  const b = e.target.closest("[data-delw]"); if(!b) return;
+  const id = b.dataset.delw;
+  const used = db.sessions.some(s=>s.workerId===id);
+  if(used && !confirm("這位人員已有記錄，刪除後那些記錄會找不到人員。仍要刪除？")) return;
+  db.workers = db.workers.filter(w=>w.id!==id);
+  persist(); render();
+});
+document.getElementById("btnAddWorker").addEventListener("click", ()=>{
+  db.workers.push({id:"w"+Date.now(),name:"新人員",hourlyRate:0,billable:true,note:""});
+  persist(); render();
+});
+
+document.querySelector("#tblLevels").addEventListener("change", e=>{
+  const t = e.target; if(!t.dataset.l) return;
+  const lv = num(t.dataset.l);
+  const l = db.levels.find(x=>num(x.level)===lv); if(!l) return;
+  const k = t.dataset.k;
+  l[k] = (k==="level"||k==="required") ? (parseFloat(t.value)||0) : t.value;
+  persist(); render();
+});
+document.querySelector("#tblLevels").addEventListener("click", e=>{
+  const b = e.target.closest("[data-dell]"); if(!b) return;
+  db.levels = db.levels.filter(l=>num(l.level)!==num(b.dataset.dell));
+  persist(); render();
+});
+document.getElementById("btnAddLevel").addEventListener("click", ()=>{
+  const max = db.levels.reduce((m,l)=>Math.max(m,num(l.level)),0);
+  db.levels.push({level:max+1,required:0,confidence:"estimated",note:""});
+  persist(); render();
+});
+
+/* ---------- file io ---------- */
+function ioMsg(t,cls){
+  const el = document.getElementById("ioMsg");
+  el.textContent = t||""; el.className = "msg"+(cls?" "+cls:"");
+}
+function download(name, text, type){
+  const b = new Blob([text], {type:type||"application/json"});
+  const u = URL.createObjectURL(b);
+  const a = document.createElement("a");
+  a.href = u; a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(u), 500);
+}
+function stamp(){ return new Date().toISOString().slice(0,10); }
+
+document.getElementById("btnExport").addEventListener("click", ()=>{
+  db.meta.updatedAt = new Date().toISOString();
+  download(`grind-log-${stamp()}.json`, JSON.stringify(db,null,2));
+  ioMsg("已匯出 JSON","ok");
+});
+document.getElementById("btnCsv").addEventListener("click", ()=>{
+  const head = ["日期","星期","起","迄","時數","計費時數","人員","等級","獲得%","該級升級經驗","獲得經驗","每小時經驗","每小時%","費用","每百萬經驗成本","備註","啟用"];
+  const lines = [head.join(",")];
+  sorted().forEach(s=>{
+    const d = derive(s);
+    lines.push([
+      s.date, weekday(s.date), s.start, s.end, d.hours, d.billHours,
+      `"${(d.worker?d.worker.name:"?").replace(/"/g,'""')}"`,
+      s.level, s.gainedPct, d.required, Math.round(d.units),
+      Math.round(d.unitsPerHour), d.pctPerHour.toFixed(3),
+      Math.round(d.cost), Math.round(d.costPerMUnit),
+      `"${String(s.note||"").replace(/"/g,'""')}"`,
+      isOn(s) ? "是" : "否"
+    ].join(","));
+  });
+  download(`grind-log-${stamp()}.csv`, "\ufeff"+lines.join("\n"), "text/csv;charset=utf-8");
+  ioMsg("已匯出 CSV","ok");
+});
+document.getElementById("btnImport").addEventListener("click", ()=> document.getElementById("fileInput").click());
+document.getElementById("fileInput").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = normalize(JSON.parse(r.result));
+      if(!d.sessions.length && !d.levels.length) throw new Error("看起來不是 grind-log 檔案");
+      db = d; editingId = null; page = 1; persist(); render();
+      ioMsg(`已匯入 ${d.sessions.length} 筆記錄`,"ok");
+    }catch(err){ ioMsg("讀不了這個檔案："+err.message,"err"); }
+  };
+  r.readAsText(f);
+  e.target.value = "";
+});
+document.getElementById("btnReset").addEventListener("click", ()=>{
+  if(!confirm("清空所有記錄、人員與等級表？建議先匯出 JSON 備份。")) return;
+  db = {schema:"grind-log/v1",meta:{title:"練功記錄",unit:"exp",currency:"TWD"},levels:[],workers:[],sessions:[]};
+  page = 1; persist(); render(); ioMsg("已清空","ok");
+});
+
+/* ---------- Electron 專用的開檔／存檔 ----------
+   瀏覽器版一律用「匯出 JSON / 匯入 JSON」，按鈕維持隱藏。 */
+if(window.grindLogNative){
+  document.getElementById("nativeRow").hidden = false;
+  document.getElementById("btnSaveFile").addEventListener("click", async ()=>{
+    db.meta.updatedAt = new Date().toISOString();
+    const r = await window.grindLogNative.save(JSON.stringify(db,null,2));
+    ioMsg(r.ok? "已存到 "+r.path : (r.canceled? "" : "存檔失敗："+r.error), r.ok?"ok":"err");
+  });
+  document.getElementById("btnOpenFile").addEventListener("click", async ()=>{
+    const r = await window.grindLogNative.open();
+    if(r.canceled) return;
+    if(!r.ok){ ioMsg("開檔失敗："+r.error,"err"); return; }
+    try{
+      db = normalize(JSON.parse(r.text)); editingId=null; page = 1; persist(); render();
+      ioMsg("已開啟 "+r.path,"ok");
+    }catch(err){ ioMsg("檔案格式不對："+err.message,"err"); }
+  });
+}
+
+/* ---------- boot ---------- */
+document.getElementById("f-date").value = new Date().toISOString().slice(0,10);
+render();
+</script>
+</body>
+</html>

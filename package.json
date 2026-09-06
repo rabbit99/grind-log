@@ -1,0 +1,16 @@
+{
+  "name": "grind-log",
+  "version": "1.0.0",
+  "description": "分母會變動的進度追蹤 — 練功時段記錄與效率分析",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^32.0.0"
+  },
+  "dependencies": {
+    "jsdom": "^30.0.1",
+    "puppeteer": "^25.10.0"
+  }
+}
