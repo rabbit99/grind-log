@@ -556,9 +556,16 @@ function load(){
     let saved = false;
     try{
       const key = STORE_KEY + ":unreadable";
-      const old = localStorage.getItem(key);
-      localStorage.setItem(old && old !== raw ? key + "-" + Date.now() : key, raw);
-      saved = true;
+      // 每次重新整理都會走到這裡：同一份原文已經備份過（不論哪一格）就不再寫，不能越存越多份
+      for(let i = 0; i < localStorage.length && !saved; i++){
+        const k = localStorage.key(i);
+        if((k === key || k.startsWith(key + "-")) && localStorage.getItem(k) === raw) saved = true;
+      }
+      if(!saved){
+        // 那一格已經有另一份不同的內容時另開一格，不覆蓋前一次的
+        localStorage.setItem(localStorage.getItem(key) ? key + "-" + Date.now() : key, raw);
+        saved = true;
+      }
     }catch(_){}                               // 空間不足時備份會失敗，提示要照實講
     loadProblem = {msg: safeStr(e && e.message) || "無法解析", saved, raw};
     return normalize({});
@@ -1299,7 +1306,22 @@ document.getElementById("btnCsv").addEventListener("click", ()=>{
   download(`grind-log-${stamp()}.csv`, "\ufeff"+lines.join("\n"), "text/csv;charset=utf-8");
   ioMsg("已匯出 CSV","ok");
 });
-document.getElementById("btnImport").addEventListener("click", ()=> document.getElementById("fileInput").click());
+/* 換掉整份資料前的提醒。讀不出原本的資料時，匯出 JSON 匯出的是畫面上的資料、救不了原文；
+   而且換掉之後橫幅收起，「下載原始內容」也按不到了，所以要叫他先下載 */
+function backupAdvice(){
+  if(!loadProblem) return "建議先匯出 JSON 備份。";
+  return loadProblem.saved
+    ? "讀不出來的原文另外備份著，但換掉之後就不能再按「下載原始內容」，還沒下載的話請先下載。"
+    : "讀不出來的原文沒有備份，換掉之後就救不回來。請先按「下載原始內容」存下來。";
+}
+/* 平常匯入不問（跟以前一樣）；讀不出原本的資料時先確認，免得原文來不及下載就被蓋掉 */
+function confirmReplaceUnreadable(){
+  return !loadProblem || confirm("匯入會取代目前的內容。" + backupAdvice());
+}
+document.getElementById("btnImport").addEventListener("click", ()=>{
+  if(!confirmReplaceUnreadable()) return;
+  document.getElementById("fileInput").click();
+});
 document.getElementById("fileInput").addEventListener("change", e=>{
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
@@ -1318,13 +1340,13 @@ document.getElementById("fileInput").addEventListener("change", e=>{
 /* 種子資料只在 localStorage 全空時才會載入，清空或改過之後就回不去了，
    所以給一個明確的還原入口，不必開 DevTools。 */
 document.getElementById("btnDemo").addEventListener("click", ()=>{
-  if(!confirm("用示範資料覆蓋目前的內容？現有的記錄、人員、等級表都會被取代，建議先匯出 JSON 備份。")) return;
+  if(!confirm("用示範資料覆蓋目前的內容？現有的記錄、人員、等級表都會被取代。" + backupAdvice())) return;
   db = normalize(seed()); editingId = null; page = 1; dayPage = 1; loadProblem = null; syncLoadBanner(); resetEditUI(); persist(); render();
   ioMsg(`已還原示範資料（${db.sessions.length} 筆）`,"ok");
 });
 
 document.getElementById("btnReset").addEventListener("click", ()=>{
-  if(!confirm("全部歸零？記錄、人員、等級表都會清掉，變成完全空白。\n要回到範例狀態請改按「還原示範資料」。建議先匯出 JSON 備份。")) return;
+  if(!confirm("全部歸零？記錄、人員、等級表都會清掉，變成完全空白。\n要回到範例狀態請改按「還原示範資料」。" + backupAdvice())) return;
   db = {schema:"grind-log/v1",meta:{title:"練功記錄",unit:"exp",currency:"TWD"},levels:[],workers:[],sessions:[]};
   editingId = null; page = 1; dayPage = 1; loadProblem = null; syncLoadBanner(); resetEditUI(); persist(); render();
   ioMsg("已清空。要回到示範資料，按「還原示範資料」","ok");
@@ -1337,9 +1359,11 @@ if(window.grindLogNative){
   document.getElementById("btnSaveFile").addEventListener("click", async ()=>{
     db.meta.updatedAt = new Date().toISOString();
     const r = await window.grindLogNative.save(JSON.stringify(db,null,2));
-    ioMsg(r.ok? "已存到 "+r.path : (r.canceled? "" : "存檔失敗："+r.error), r.ok?"ok":"err");
+    if(r.ok && loadProblem) ioMsg("已存到 "+r.path+" —— 這是目前畫面上的資料，不是讀不出來的原始內容，那份請按上方的「下載原始內容」","err");
+    else ioMsg(r.ok? "已存到 "+r.path : (r.canceled? "" : "存檔失敗："+r.error), r.ok?"ok":"err");
   });
   document.getElementById("btnOpenFile").addEventListener("click", async ()=>{
+    if(!confirmReplaceUnreadable()) return;
     const r = await window.grindLogNative.open();
     if(r.canceled) return;
     if(!r.ok){ ioMsg("開檔失敗："+r.error,"err"); return; }
