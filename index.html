@@ -1040,6 +1040,8 @@ document.querySelector("#tblLevels").addEventListener("change", e=>{
 });
 document.querySelector("#tblLevels").addEventListener("click", e=>{
   const b = e.target.closest("[data-dell]"); if(!b) return;
+  // 等級是 null／缺值時 esc 會給空字串，num("") 是 0，會誤刪等級 0 的列；沒有等級值就不動作（跟以前一樣）
+  if(b.dataset.dell === "") return;
   db.levels = db.levels.filter(l=>num(l.level)!==num(b.dataset.dell));
   persist(); render();
 });
