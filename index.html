@@ -570,8 +570,8 @@ function setSaveState(t){
 const num = n => Number(n);
 /* 獲得% 不是數字（"5%"、缺欄位）就當 0，不能讓 NaN 把後面的累計歸零；
    等級是 null／空字串時 Number() 會變成 0，要當成「沒有等級」而不是 0 級 */
-const pctOf = s => { const p = num(s.gainedPct); return Number.isFinite(p) ? p : 0; };
-const lvOf  = s => (s.level == null || s.level === "") ? NaN : num(s.level);
+const pctOf = s => { const p = num(s.gainedPct); return Number.isFinite(p) ? (p || 0) : 0; };   // p||0 把 -0 變成 0
+const lvOf  = s => (s.level == null || String(s.level).trim() === "") ? NaN : num(s.level);
 function hoursOf(s){
   const a = num(s.start), b = num(s.end);
   if(!isFinite(a)||!isFinite(b)) return 0;
@@ -657,8 +657,10 @@ function renderHero(){
     stats.innerHTML = ""; legend.innerHTML = "";
     return;
   }
-  const lv = num(all[all.length-1].level);
-  const cur = all.filter(s=>num(s.level)===lv);
+  // 目前等級取最後一筆「等級有效」的啟用記錄，跟每日頁一致；等級壞掉的那筆不能把經驗條帶到 Lv 0
+  const lastValid = [...all].reverse().find(s => Number.isFinite(lvOf(s)));
+  const lv = lastValid ? lvOf(lastValid) : num(all[all.length-1].level);
+  const cur = all.filter(s=>lvOf(s)===lv);
   const li = levelInfo(lv);
   let acc = 0;
   const frag = document.createDocumentFragment();
@@ -1298,7 +1300,7 @@ function segHtml(s){
   const on = isOn(s);
   const tip = [
     `${hhmm(a)}–${hhmm(b)}${cross ? "（跨午夜到翌日）" : ""}　${d.worker ? d.worker.name : "?"}`,
-    `lv${Number.isFinite(num(s.level)) ? num(s.level) : "?"}　+${fmt4(num(s.gainedPct))}%`,
+    `lv${Number.isFinite(lvOf(s)) ? lvOf(s) : "?"}　${pctOf(s) < 0 ? "" : "+"}${fmt4(pctOf(s))}%`,
     d.adjusted ? `時段 ${fmt1(d.hours)}H／計費 ${fmt1(d.billHours)}H` : `${fmt1(d.hours)}H`,
     d.cost ? `費用 ${fmt0(d.cost)}` : "",
     s.note ? `備註：${s.note}` : "",
