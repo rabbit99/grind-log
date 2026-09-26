@@ -231,8 +231,8 @@
   .lvpct{white-space:nowrap}
   .lvpct span{color:var(--bone-dim);font-size:11px}
 
-  /* 窄螢幕：每天變成一張卡片，時間軸獨立一行 */
-  @media(max-width:820px){
+  /* 窄螢幕：每天變成一張卡片，時間軸獨立一行。表格模式最少要約 872px（時間軸最小 260px + 其他 8 欄） */
+  @media(max-width:900px){
     #tblDaily thead{display:none}
     #tblDaily,#tblDaily tbody{display:block}
     /* 用 flex 換行而不是 grid：grid 的欄寬會被第三行的 exp 撐開，讓每張卡片的「週X」位置不一 */
@@ -246,6 +246,8 @@
     #tblDaily td.d-week{min-width:2.2em}
     #tblDaily td.d-pct{order:4;margin-left:auto;text-align:right}
     #tblDaily td.tlcell{order:5;flex:0 0 100%;width:auto;min-width:0}
+    #tblDaily td.d-cum{order:6;font-size:12px;color:var(--gold)}
+    #tblDaily td.d-cum:not(:empty)::before{content:"當前 ";color:var(--bone-dim)}
     #tblDaily td.d-exp,#tblDaily td.d-cost,#tblDaily td.d-hrs{order:6;font-size:12px;color:var(--bone-dim)}
     #tblDaily td.d-exp:not(:empty)::after{content:" exp"}
     #tblDaily td.d-cost:not(:empty)::after{content:" 元"}
@@ -1236,7 +1238,33 @@ function dailyRows(){
   }
   const rows = dates.map(date => dayRow(date, byDate.get(date) || []));
   if(odd.length) rows.push(dayRow(null, odd));
+  addCumulative(rows);
   return rows;
+}
+
+/* 當前%：當天結束時，各等級已累積的 %。跟試算表的「當前%」、經驗條的「本級已累積」
+   同一個算法，只加總已啟用的時段。
+   只能加總「有登錄」的時段：已經升上去的等級如果累積不到 100%，代表有時段沒登錄，
+   這一欄會偏低，標上「缺」。日期不明的那一組不知道落在哪天，不參與逐日累計。 */
+function addCumulative(rows){
+  const lvs = db.sessions.map(s=>num(s.level)).filter(Number.isFinite);
+  const top = lvs.reduce((a,b)=>Math.max(a,b), -Infinity);
+  const total = new Map();
+  for(const s of db.sessions){
+    const lv = num(s.level);
+    if(isOn(s) && Number.isFinite(lv)) total.set(lv, (total.get(lv)||0) + num(s.gainedPct));
+  }
+  const run = new Map();
+  for(const r of rows){
+    r.cumByLevel = [];
+    if(!r.date) continue;
+    for(const [lv, p] of r.pctByLevel){
+      if(!Number.isFinite(lv)) continue;
+      run.set(lv, (run.get(lv)||0) + p);
+      const tot = total.get(lv) || 0;
+      r.cumByLevel.push({lv, cum: run.get(lv), incomplete: lv < top && tot < 99.5, total: tot});
+    }
+  }
 }
 
 /* 時間軸上的一段。位置用真實起訖（10:25 就畫在 10:25）。
@@ -1273,7 +1301,7 @@ function dayRowHtml(r){
     return `<tr class="dayrow nodata">
       <td class="tl d-date">${md}</td><td class="tl d-week">${wk}</td><td class="d-lv">—</td>
       <td class="tlcell"><div class="track"><span class="norec">無記錄</span></div></td>
-      <td class="d-pct"></td><td class="d-exp"></td><td class="d-cost"></td><td class="d-hrs"></td>
+      <td class="d-pct"></td><td class="d-cum"></td><td class="d-exp"></td><td class="d-cost"></td><td class="d-hrs"></td>
     </tr>`;
   }
   const lvName = l => Number.isFinite(l) ? String(l) : "?";
@@ -1284,6 +1312,14 @@ function dayRowHtml(r){
     : r.pctByLevel.length === 1 ? fmt4(r.pctByLevel[0][1])
     : r.pctByLevel.map(([l,p]) => `<div class="lvpct"><span>lv${lvName(l)}</span> ${fmt4(p)}</div>`).join("");
   const notes = r.rawDates.length ? [`原始日期：${r.rawDates.join("、")}`, ...r.notes] : r.notes;
+  const cum = r.cumByLevel.map(c => {
+    const tag = c.incomplete
+      ? `<span class="est" title="${esc(`lv${c.lv} 已經升上去，但登錄的時段只加總到 ${fmt4(c.total)}%，有時段沒登錄，這一欄會偏低`)}">缺</span>`
+      : "";
+    return r.cumByLevel.length > 1
+      ? `<div class="lvpct"><span>lv${c.lv}</span> ${fmt4(c.cum)}${tag}</div>`
+      : `${fmt4(c.cum)}${tag}`;
+  }).join("");
   const allOff = r.sessions.every(s => !isOn(s));
   // 用 dayoff 而不是 off：原頁的 tr.off td 會把整列（連時間軸）壓暗，色塊就幾乎看不見
   return `<tr class="dayrow${allOff ? " dayoff" : ""}${r.date ? "" : " oddday"}">
@@ -1295,6 +1331,7 @@ function dayRowHtml(r){
       ${notes.length ? `<div class="dnote">⚑ ${notes.map(esc).join(" · ")}</div>` : ""}
     </td>
     <td class="d-pct">${pct}</td>
+    <td class="d-cum">${cum}</td>
     <td class="d-exp">${allOff ? "" : fmt0(r.units)}</td>
     <td class="d-cost">${allOff ? "" : fmt0(r.cost)}</td>
     <td class="d-hrs">${allOff ? "" : fmt1(r.billHours)}</td>
@@ -1331,7 +1368,7 @@ function renderDaily(){
           <th class="tlcell"><div class="axis">
             <span style="left:0">0</span><span style="left:25%">6</span><span style="left:50%">12</span><span style="left:75%">18</span><span style="left:100%">24</span>
           </div></th>
-          <th>獲得%</th><th>獲得經驗</th><th>花費</th><th title="實際計費／有效時數，休息時間不算">計費時數</th>
+          <th>獲得%</th><th title="當天結束時該等級已累積的 %。已經升級卻累積不到 100% 的等級標「缺」，代表有時段沒登錄">當前%</th><th>獲得經驗</th><th>花費</th><th title="實際計費／有效時數，休息時間不算">計費時數</th>
         </tr></thead>
         <tbody>${slice.map(dayRowHtml).join("")}</tbody>
       </table>
