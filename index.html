@@ -248,6 +248,7 @@
     #tblDaily td.tlcell{order:5;flex:0 0 100%;width:auto;min-width:0}
     #tblDaily td.d-cum{order:6;font-size:12px;color:var(--gold)}
     #tblDaily td.d-cum:not(:empty)::before{content:"當前 ";color:var(--bone-dim)}
+    #tblDaily td.d-cum .lvpct{display:inline;margin-right:10px}
     #tblDaily td.d-exp,#tblDaily td.d-cost,#tblDaily td.d-hrs{order:6;font-size:12px;color:var(--bone-dim)}
     #tblDaily td.d-exp:not(:empty)::after{content:" exp"}
     #tblDaily td.d-cost:not(:empty)::after{content:" 元"}
@@ -567,6 +568,10 @@ function setSaveState(t){
 
 /* ---------- derive ---------- */
 const num = n => Number(n);
+/* 獲得% 不是數字（"5%"、缺欄位）就當 0，不能讓 NaN 把後面的累計歸零；
+   等級是 null／空字串時 Number() 會變成 0，要當成「沒有等級」而不是 0 級 */
+const pctOf = s => { const p = num(s.gainedPct); return Number.isFinite(p) ? p : 0; };
+const lvOf  = s => (s.level == null || s.level === "") ? NaN : num(s.level);
 function hoursOf(s){
   const a = num(s.start), b = num(s.end);
   if(!isFinite(a)||!isFinite(b)) return 0;
@@ -658,14 +663,15 @@ function renderHero(){
   let acc = 0;
   const frag = document.createDocumentFragment();
   cur.forEach(s=>{
-    const p = Math.max(0, num(s.gainedPct));
+    const raw = pctOf(s);          // 淨值：死亡掉經驗是負的，本級已累積要跟著扣
+    const p = Math.max(0, raw);    // 色塊寬度不能是負的
     const d = document.createElement("div");
     d.className = "seg";
     d.style.width = Math.min(p,100)+"%";
     d.style.background = colorOf(s.workerId);
-    d.title = `${s.date} ${hhmm(s.start)}–${hhmm(s.end)}　${workerOf(s.workerId)?.name||"?"}　+${fmt4(p)}%`;
+    d.title = `${s.date} ${hhmm(s.start)}–${hhmm(s.end)}　${workerOf(s.workerId)?.name||"?"}　${raw<0?"":"+"}${fmt4(raw)}%`;
     frag.appendChild(d);
-    acc += p;
+    acc += raw;
   });
   bar.appendChild(frag);
 
@@ -1194,10 +1200,10 @@ function dayRow(date, ss){
   const dv = on.map(derive);
   const pctByLv = new Map();
   for(const s of on){
-    const lv = num(s.level);
-    pctByLv.set(lv, (pctByLv.get(lv)||0) + num(s.gainedPct));
+    const lv = lvOf(s);
+    pctByLv.set(lv, (pctByLv.get(lv) ?? 0) + pctOf(s));
   }
-  const levels = [...new Set(ss.map(s=>num(s.level)).filter(Number.isFinite))].sort((a,b)=>a-b);
+  const levels = [...new Set(ss.map(lvOf).filter(Number.isFinite))].sort((a,b)=>a-b);
   // 備註以「・」串接的會拆開去重，例如「代練公休・預估」和「預估」只留一次「預估」
   const notes = [];
   for(const s of ss){
@@ -1247,21 +1253,31 @@ function dailyRows(){
    只能加總「有登錄」的時段：已經升上去的等級如果累積不到 100%，代表有時段沒登錄，
    這一欄會偏低，標上「缺」。日期不明的那一組不知道落在哪天，不參與逐日累計。 */
 function addCumulative(rows){
-  const lvs = db.sessions.map(s=>num(s.level)).filter(Number.isFinite);
-  const top = lvs.reduce((a,b)=>Math.max(a,b), -Infinity);
+  // 目前等級只看啟用的記錄：打錯等級後按停用，不該讓真正的目前等級被標「缺」
+  const top = db.sessions.filter(isOn).map(lvOf).filter(Number.isFinite)
+                .reduce((a,b)=>Math.max(a,b), -Infinity);
+  // 總量只算有日期的：日期不明的不在逐日累計裡，算進總量會讓「缺」判斷跟顯示的數字對不上
   const total = new Map();
   for(const s of db.sessions){
-    const lv = num(s.level);
-    if(isOn(s) && Number.isFinite(lv)) total.set(lv, (total.get(lv)||0) + num(s.gainedPct));
+    const lv = lvOf(s);
+    if(isOn(s) && normDate(s.date) && Number.isFinite(lv)) total.set(lv, (total.get(lv) ?? 0) + pctOf(s));
   }
+  // 逐筆累加，順序跟經驗條一樣（日期、再依開始時間），浮點運算完全相同，
+  // 最後一天的值才會跟「本級已累積」逐位一致，而不是偶爾差在第四位小數
   const run = new Map();
   for(const r of rows){
     r.cumByLevel = [];
     if(!r.date) continue;
-    for(const [lv, p] of r.pctByLevel){
+    const seen = [];
+    for(const s of r.sessions){            // dayRow 已依開始時間排好
+      if(!isOn(s)) continue;
+      const lv = lvOf(s);
       if(!Number.isFinite(lv)) continue;
-      run.set(lv, (run.get(lv)||0) + p);
-      const tot = total.get(lv) || 0;
+      run.set(lv, (run.get(lv) ?? 0) + pctOf(s));
+      if(!seen.includes(lv)) seen.push(lv);
+    }
+    for(const lv of seen.sort((a,b)=>a-b)){
+      const tot = total.get(lv) ?? 0;
       r.cumByLevel.push({lv, cum: run.get(lv), incomplete: lv < top && tot < 99.5, total: tot});
     }
   }
