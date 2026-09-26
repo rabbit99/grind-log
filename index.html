@@ -686,7 +686,7 @@ function renderHero(){
     ["本級花費", fmt0(tc), db.meta.currency||"", false],
     ["累計花費", fmt0(allDv.reduce((a,d)=>a+d.cost,0)), db.meta.currency||"", false]
   ].map(([k,v,u,gold])=>
-    `<div class="stat"><div class="v${gold?" gold":""}">${v} <span class="u">${u}</span></div><div class="k">${k}</div></div>`
+    `<div class="stat"><div class="v${gold?" gold":""}">${esc(v)} <span class="u">${esc(u)}</span></div><div class="k">${esc(k)}</div></div>`
   ).join("");
   // 天數是純單位換算（時數 ÷ 24），不是日曆天數
   const inv = stats.querySelectorAll(".stat")[1];
@@ -766,7 +766,7 @@ function renderSessions(){
     const d = derive(s);
     const on = isOn(s);
     return `<tr class="${on?"":"off"}">
-      <td class="cb"><input type="checkbox" data-on="${s.id}"${on?" checked":""} title="${on?"列入統計":"不列入統計"}"></td>
+      <td class="cb"><input type="checkbox" data-on="${esc(s.id)}"${on?" checked":""} title="${on?"列入統計":"不列入統計"}"></td>
       <td class="tl">${esc(s.date)}</td>
       <td class="tl">${weekday(s.date)}</td>
       <td class="tl">${hhmm(s.start)}–${hhmm(s.end)}</td>
@@ -780,8 +780,8 @@ function renderSessions(){
       <td>${fmt0(d.cost)}</td>
       <td class="tl" style="white-space:normal;max-width:180px">${esc(s.note||"")}</td>
       <td><span class="rowact">
-        <button class="sm ghost" data-edit="${s.id}">改</button>
-        <button class="sm ghost danger" data-del="${s.id}">刪</button>
+        <button class="sm ghost" data-edit="${esc(s.id)}">改</button>
+        <button class="sm ghost danger" data-del="${esc(s.id)}">刪</button>
       </span></td>
     </tr>`;
   }).join("");
@@ -841,11 +841,11 @@ function renderWorkerEdit(){
   const tb = document.querySelector("#tblWorkerEdit tbody");
   tb.innerHTML = db.workers.map(w=>`
     <tr>
-      <td class="tl"><input data-w="${w.id}" data-k="name" value="${esc(w.name)}" style="width:120px"></td>
-      <td><input data-w="${w.id}" data-k="hourlyRate" type="number" step="any" value="${w.hourlyRate}" style="width:90px"></td>
-      <td><input data-w="${w.id}" data-k="billable" type="checkbox" ${w.billable?"checked":""} style="width:auto"></td>
-      <td class="tl"><input data-w="${w.id}" data-k="note" value="${esc(w.note||"")}" style="width:150px"></td>
-      <td><button class="sm ghost danger" data-delw="${w.id}">刪</button></td>
+      <td class="tl"><input data-w="${esc(w.id)}" data-k="name" value="${esc(w.name)}" style="width:120px"></td>
+      <td><input data-w="${esc(w.id)}" data-k="hourlyRate" type="number" step="any" value="${esc(w.hourlyRate)}" style="width:90px"></td>
+      <td><input data-w="${esc(w.id)}" data-k="billable" type="checkbox" ${w.billable?"checked":""} style="width:auto"></td>
+      <td class="tl"><input data-w="${esc(w.id)}" data-k="note" value="${esc(w.note||"")}" style="width:150px"></td>
+      <td><button class="sm ghost danger" data-delw="${esc(w.id)}">刪</button></td>
     </tr>`).join("");
 }
 
@@ -853,16 +853,16 @@ function renderLevels(){
   const tb = document.querySelector("#tblLevels tbody");
   tb.innerHTML = db.levels.slice().sort((a,b)=>a.level-b.level).map(l=>`
     <tr>
-      <td class="tl"><input data-l="${l.level}" data-k="level" type="number" value="${l.level}" style="width:70px"></td>
-      <td><input data-l="${l.level}" data-k="required" type="number" value="${l.required}" style="width:130px"></td>
+      <td class="tl"><input data-l="${esc(l.level)}" data-k="level" type="number" value="${esc(l.level)}" style="width:70px"></td>
+      <td><input data-l="${esc(l.level)}" data-k="required" type="number" value="${esc(l.required)}" style="width:130px"></td>
       <td class="tl">
-        <select data-l="${l.level}" data-k="confidence" style="width:90px">
+        <select data-l="${esc(l.level)}" data-k="confidence" style="width:90px">
           <option value="measured"${l.confidence!=="estimated"?" selected":""}>實測</option>
           <option value="estimated"${l.confidence==="estimated"?" selected":""}>推估</option>
         </select>
       </td>
-      <td class="tl"><input data-l="${l.level}" data-k="note" value="${esc(l.note||"")}" style="width:140px"></td>
-      <td><button class="sm ghost danger" data-dell="${l.level}">刪</button></td>
+      <td class="tl"><input data-l="${esc(l.level)}" data-k="note" value="${esc(l.note||"")}" style="width:140px"></td>
+      <td><button class="sm ghost danger" data-dell="${esc(l.level)}">刪</button></td>
     </tr>`).join("");
 }
 
@@ -885,7 +885,7 @@ document.getElementById("f-end").addEventListener("input", syncBhField);
 function fillWorkerSelect(){
   const sel = document.getElementById("f-worker");
   const keep = sel.value;
-  sel.innerHTML = db.workers.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join("");
+  sel.innerHTML = db.workers.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("");
   if(keep && db.workers.some(w=>w.id===keep)) sel.value = keep;
   syncBhField();
 }
