@@ -1318,12 +1318,11 @@ function backupAdvice(){
 function confirmReplaceUnreadable(){
   return !loadProblem || confirm("匯入會取代目前的內容。" + backupAdvice());
 }
-document.getElementById("btnImport").addEventListener("click", ()=>{
-  if(!confirmReplaceUnreadable()) return;
-  document.getElementById("fileInput").click();
-});
+document.getElementById("btnImport").addEventListener("click", ()=> document.getElementById("fileInput").click());
 document.getElementById("fileInput").addEventListener("change", e=>{
   const f = e.target.files[0]; if(!f) return;
+  // 選好檔案才問：開選檔視窗要靠剛才那一下點擊，確認框停太久再開會被瀏覽器擋掉
+  if(!confirmReplaceUnreadable()){ e.target.value = ""; return; }
   const r = new FileReader();
   r.onload = () => {
     try{
