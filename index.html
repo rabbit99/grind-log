@@ -1051,9 +1051,12 @@ function renderLevels(){
 
 /* 計費時數只對「計費」的人員有意義，其他人隱藏這一欄 */
 function syncBhField(){
-  const w = workerOf(document.getElementById("f-worker").value);
+  const id = document.getElementById("f-worker").value;
+  const w = workerOf(id);
   const wrap = document.getElementById("f-bh-wrap");
-  const show = !!(w && w.billable);
+  // 找不到的人員（見 fillWorkerSelect）不知道是不是計費的：欄位照樣顯示，
+  // 不然會把正在修改的記錄原本的計費時數清掉
+  const show = w ? !!w.billable : id !== "";
   wrap.hidden = !show;
   if(!show){ document.getElementById("f-bh").value = ""; return; }
   const a = parseFloat(document.getElementById("f-start").value);
@@ -1065,11 +1068,14 @@ document.getElementById("f-worker").addEventListener("change", syncBhField);
 document.getElementById("f-start").addEventListener("input", syncBhField);
 document.getElementById("f-end").addEventListener("input", syncBhField);
 
-function fillWorkerSelect(){
+/* 表單選的人員不在名單裡（刪掉了，或記錄本來就對不到人）時，保留原本的 id、顯示成「找不到」。
+   不能讓瀏覽器自動跳到第一位 —— 正在修改的記錄一按「儲存修改」，就悄悄變成別人的了 */
+function fillWorkerSelect(keep = document.getElementById("f-worker").value){
   const sel = document.getElementById("f-worker");
-  const keep = sel.value;
-  sel.innerHTML = db.workers.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("");
-  if(keep && db.workers.some(w=>w.id===keep)) sel.value = keep;
+  const missing = keep !== "" && !db.workers.some(w=>w.id===keep);
+  sel.innerHTML = db.workers.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")
+    + (missing ? `<option value="${esc(keep)}">（找不到這位人員）</option>` : "");
+  if(keep !== "") sel.value = keep;
   syncBhField();
 }
 
@@ -1095,6 +1101,11 @@ function validate(v){
   if(!isFinite(v.start)||!isFinite(v.end)) return "填起迄時間";
   if(v.start===v.end) return "起迄時間不能相同";
   if(!v.workerId) return "先在下方「人員與時薪」新增人員";
+  // 選的是「找不到這位人員」：修改時保留記錄原本的人員可以，其他情況要重新選
+  if(!workerOf(v.workerId)){
+    const cur = editingId ? db.sessions.find(s=>s.id===editingId) : null;
+    if(!cur || cur.workerId !== v.workerId) return "找不到這位人員（可能已經刪除），請重新選擇";
+  }
   if(!isFinite(v.level)) return "填等級";
   if(!isFinite(v.gainedPct)) return "填獲得 %";
   if(v.billableHours!==null && v.billableHours<0) return "計費時數不能是負的";
@@ -1109,8 +1120,7 @@ document.getElementById("btnSave").addEventListener("click", ()=>{
     if(!s){ editingId = null; resetEditUI(); formMsg("找不到要修改的記錄，表單改回新增記錄","err"); return; }
     Object.assign(s, v);
     editingId = null;
-    document.getElementById("btnSave").textContent = "新增記錄";
-    document.getElementById("btnCancel").hidden = true;
+    resetEditUI();
     formMsg("已更新","ok");
   }else{
     const nid = "s"+Date.now();
@@ -1126,9 +1136,7 @@ document.getElementById("btnSave").addEventListener("click", ()=>{
 });
 document.getElementById("btnCancel").addEventListener("click", ()=>{
   editingId = null;
-  document.getElementById("btnSave").textContent = "新增記錄";
-  document.getElementById("btnCancel").hidden = true;
-  formMsg("");
+  resetEditUI();
 });
 
 document.querySelector("#tblSessions tbody").addEventListener("change", e=>{
@@ -1159,7 +1167,7 @@ document.querySelector("#tblSessions tbody").addEventListener("click", e=>{
     document.getElementById("f-date").value = s.date;
     document.getElementById("f-start").value = s.start;
     document.getElementById("f-end").value = s.end;
-    document.getElementById("f-worker").value = s.workerId;
+    fillWorkerSelect(safeStr(s.workerId));     // 記錄的人員不在名單裡時，選單也要照實顯示
     document.getElementById("f-level").value = s.level;
     document.getElementById("f-pct").value = s.gainedPct;
     document.getElementById("f-bh").value = (s.billableHours===null||s.billableHours===undefined)?"":s.billableHours;
@@ -1299,11 +1307,15 @@ document.getElementById("btnDownloadRaw").addEventListener("click", ()=>{
   ioMsg("已下載原始內容。修好之後用「匯入 JSON」載入","ok");
 });
 
-/* 換了整份資料後，表單不能還停在「儲存修改」—— editingId 已經清掉，再按會變成新增一筆 */
+/* 離開修改模式（取消、存好、刪掉那筆、換了整份資料）時把表單改回「新增記錄」——
+   editingId 已經清掉，表單還停在「儲存修改」的話，再按會變成新增一筆 */
 function resetEditUI(){
   document.getElementById("btnSave").textContent = "新增記錄";
   document.getElementById("btnCancel").hidden = true;
   formMsg("");
+  // 不在修改了：人員選單不用再保留「找不到這位人員」，回到預設的第一位
+  const sel = document.getElementById("f-worker");
+  if(!workerOf(sel.value)) fillWorkerSelect("");
 }
 function ioMsg(t,cls){
   const el = document.getElementById("ioMsg");
