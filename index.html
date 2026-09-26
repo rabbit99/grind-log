@@ -1140,7 +1140,15 @@ document.querySelector("#tblSessions tbody").addEventListener("change", e=>{
 document.querySelector("#tblSessions tbody").addEventListener("click", e=>{
   const del = e.target.closest("[data-del]"), ed = e.target.closest("[data-edit]");
   if(del){
-    db.sessions = db.sessions.filter(s=>s.id!==del.dataset.del);
+    const id = del.dataset.del;
+    const s = db.sessions.find(x=>x.id===id); if(!s) return;
+    // 刪除沒有復原，按鈕又緊貼著「改」（手機上一直顯示），先讓使用者看清楚是哪一筆
+    const w = workerOf(s.workerId), wd = weekday(s.date);
+    if(!confirm(`刪除這筆記錄？\n\n${safeStr(s.date)}${wd?`（${wd}）`:""} ${hhmm(s.start)}–${hhmm(s.end)}\n`
+      + `${w?w.name:"?"} · Lv ${safeStr(s.level).trim() || "?"} · 獲得 ${fmt4(s.gainedPct)}%\n\n刪除後無法復原。`)) return;
+    db.sessions = db.sessions.filter(x=>x.id!==id);
+    // 刪的是正在改的那筆：表單不能還停在「儲存修改」，不然再按儲存會找不到記錄
+    if(editingId === id){ editingId = null; resetEditUI(); }
     persist(); render(); return;
   }
   if(ed){
@@ -1203,8 +1211,12 @@ document.querySelector("#tblWorkerEdit").addEventListener("change", e=>{
 document.querySelector("#tblWorkerEdit").addEventListener("click", e=>{
   const b = e.target.closest("[data-delw]"); if(!b) return;
   const id = b.dataset.delw;
-  const used = db.sessions.some(s=>s.workerId===id);
-  if(used && !confirm("這位人員已有記錄，刪除後那些記錄會找不到人員。仍要刪除？")) return;
+  const w = workerOf(id);
+  const name = w && safeStr(w.name).trim() || "（未命名）";
+  const used = db.sessions.filter(s=>s.workerId===id).length;
+  if(!confirm(used
+    ? `刪除人員「${name}」？\n這位人員有 ${used} 筆記錄，刪除後那些記錄會找不到人員。`
+    : `刪除人員「${name}」？`)) return;
   db.workers = db.workers.filter(w=>w.id!==id);
   persist(); render();
 });
@@ -1225,7 +1237,14 @@ document.querySelector("#tblLevels").addEventListener("click", e=>{
   const b = e.target.closest("[data-dell]"); if(!b) return;
   // 等級是 null／缺值時 esc 會給空字串，num("") 是 0，會誤刪等級 0 的列；沒有等級值就不動作（跟以前一樣）
   if(b.dataset.dell === "") return;
-  db.levels = db.levels.filter(l=>num(l.level)!==num(b.dataset.dell));
+  const lv = num(b.dataset.dell);
+  const rows = db.levels.filter(l=>num(l.level)===lv).length;
+  if(!rows) return;                                   // 刪不到任何列時不問（跟以前一樣不動作）
+  const used = db.sessions.filter(s=>num(s.level)===lv).length;
+  if(!confirm(`刪除 Lv ${b.dataset.dell} 的等級資料？`
+    + (rows > 1 ? `\n等級表裡有 ${rows} 列都是 Lv ${b.dataset.dell}，會一起刪掉。` : "")
+    + (used ? `\n有 ${used} 筆記錄是這個等級，刪除後會算不出它們的經驗和時速。` : ""))) return;
+  db.levels = db.levels.filter(l=>num(l.level)!==lv);
   persist(); render();
 });
 document.getElementById("btnAddLevel").addEventListener("click", ()=>{
