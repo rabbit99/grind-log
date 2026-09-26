@@ -74,7 +74,13 @@
 
   /* ---------- layout ---------- */
   .cols{display:grid;grid-template-columns:320px 1fr;gap:22px;align-items:start}
-  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  /* 窄螢幕改成單欄。欄位要能縮到比表格窄（min-width:0），表格在自己的 .scroll 裡左右捲，
+     不然最寬的記錄表會把整欄、連同上面的表單一起撐出螢幕。
+     寬螢幕不加：那裡表格一縮，改／刪按鈕就被捲到看不到的地方 */
+  @media(max-width:900px){
+    .cols{grid-template-columns:1fr}
+    .cols > *{min-width:0}
+  }
 
   .panel{
     background:var(--stone-800);border:1px solid var(--rule);
@@ -145,6 +151,8 @@
   td.bh.adj{color:var(--gold);font-weight:600}
   .rowact{opacity:0;transition:opacity .12s}
   tr:hover .rowact,.rowact:focus-within{opacity:1}
+  /* 觸控螢幕沒有「滑過」，改／刪要一直看得到 */
+  @media(hover:none){.rowact{opacity:1}}
   tfoot td{font-weight:600;border-top:1px solid #3D4859;border-bottom:none}
   .empty{padding:26px var(--pad);color:var(--bone-dim);font-size:13px}
 
