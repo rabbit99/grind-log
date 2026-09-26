@@ -507,6 +507,8 @@ function seed(){
 }
 
 /* ---------- state ---------- */
+/* 讀不出原本的資料時記在這裡，並暫停自動儲存（見 load 與 persist） */
+let loadProblem = null;
 let db = load();
 let editingId = null;
 
@@ -526,30 +528,160 @@ try{
 }catch(e){}
 function persistUI(){ try{ localStorage.setItem(UI_KEY, JSON.stringify({pageSize, tab, dayPageSize})); }catch(e){} }
 
+/* 讀不出原本的資料時，不能默默換成示範資料 —— 使用者一操作就會存檔，把原本的資料蓋掉。
+   原文另外備份到 :unreadable，並暫停自動儲存，直到使用者自己匯入、還原示範資料或清空。 */
 function load(){
-  try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(raw) return normalize(JSON.parse(raw));
-  }catch(e){ console.warn("讀取失敗，改用預設資料", e); }
-  return normalize(seed());
+  let raw = null;
+  try{ raw = localStorage.getItem(STORE_KEY); }
+  catch(e){ return normalize(seed()); }     // 瀏覽器不給用 localStorage：跟以前一樣顯示示範資料
+  if(!raw) return normalize(seed());
+  try{ return normalize(JSON.parse(raw)); }
+  catch(e){
+    console.warn("原本的資料讀不出來", e);
+    let saved = false;
+    try{
+      const key = STORE_KEY + ":unreadable";
+      const old = localStorage.getItem(key);
+      localStorage.setItem(old && old !== raw ? key + "-" + Date.now() : key, raw);
+      saved = true;
+    }catch(_){}                               // 空間不足時備份會失敗，提示要照實講
+    loadProblem = {msg: safeStr(e && e.message) || "無法解析", saved};
+    return normalize({});
+  }
 }
-function normalize(d){
-  d = d || {};
+/* ---------- 資料整理 ----------
+   讀進來的資料可能是別人手改的、舊版的，或根本格式不對。進到程式之前，先把每個欄位
+   整理成 FORMAT.md 裡的型別：
+   - 能轉的就轉：數字字串 "10" → 10、日期 2026-9-5 → 2026-09-05
+   - 轉不了的文字保留原樣（例如 "5%"），畫面上看得到，計算時不採用
+   - 物件、陣列、布林塞進數值欄位時拿掉；物件、陣列塞進文字欄位時清空
+     —— 它們會讓畫面在轉字串時當掉
+   兩種情境的規則不同：
+   - 匯入（issues 有傳入）：使用者主動、會看到訊息，可以略過沒用或重複的等級列
+   - 從 localStorage 載入（沒有 issues）：那是使用者現有的資料，他看不到任何訊息，
+     只做不會掉資料的轉換，一列都不刪
+   乾淨的資料經過這裡不會有任何改變。
+   注意：開機時 `let db = load()` 會在這些定義之前執行，這裡只能用函式宣告，
+   不能用宣告在後面的 const。 */
+function safeStr(v){ try{ return v == null ? "" : String(v); }catch(e){ return ""; } }
+/* id 會寫進 HTML 屬性，換行這類控制字元會被瀏覽器改寫，讀回來就對不上 */
+function cleanId(v){ return safeStr(v).replace(/[\u0000-\u001F\u007F]/g, "").trim(); }
+function isPlainObj(v){ return !!v && typeof v === "object" && !Array.isArray(v); }
+/* 數值欄位：數字維持、十進位數字字串轉數字、空值維持、空字串當空值；
+   其他文字保留（計算端當成沒有值），物件／陣列／布林拿掉。
+   只認十進位 —— "0x33" 不猜成 51 */
+function numField(v, c){
+  if(v === null || v === undefined || typeof v === "number") return v;
+  if(typeof v === "string"){
+    const t = v.trim();
+    if(t === "") return null;
+    if(/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t)){
+      const n = Number(t);
+      if(Number.isFinite(n)) return n;      // "1e999" 會溢位成 Infinity，JSON 存不了，當成認不得
+    }
+    c.bad++;
+    return v;
+  }
+  c.badtype++;
+  return null;
+}
+
+function normalize(d, issues){
+  const importing = Array.isArray(issues);
+  if(!isPlainObj(d)) d = {};
+  const c = {dropped:0, newid:0, reid:0, rewid:0, padded:0, baddate:0, bad:0, badtype:0, badbh:0, badtext:0, badlv:0, duplv:0};
+  const textField = v => (v !== null && typeof v === "object") ? (c.badtext++, "") : safeStr(v);
   d.schema = d.schema || "grind-log/v1";
-  d.meta = Object.assign({title:"練功記錄",unit:"exp",currency:"TWD"}, d.meta||{});
-  d.levels = Array.isArray(d.levels)? d.levels : [];
-  d.workers = Array.isArray(d.workers)? d.workers : [];
-  d.sessions = Array.isArray(d.sessions)? d.sessions : [];
-  // 沒有 enabled 欄位的一律視為啟用（舊檔匯入、種子資料都走這裡）
-  d.sessions.forEach(s=>{
-    s.enabled = s.enabled !== false;
-    // 計費時數：空值代表「跟時段一樣」，不寫死成數字，時段改了才會跟著動
-    const b = s.billableHours;
-    s.billableHours = (b===null||b===undefined||b===""||!isFinite(+b)||+b<0) ? null : +b;
+  const meta = isPlainObj(d.meta) ? d.meta : {};
+  for(const k of ["title","unit","currency"]) if(k in meta) meta[k] = textField(meta[k]);
+  d.meta = Object.assign({title:"練功記錄",unit:"exp",currency:"TWD"}, meta);
+
+  // 等級表：刪除和查詢都用等級數字找列。匯入時略過沒有有效等級的列和重複的等級；
+  // 載入時一列都不刪 —— 那可能是使用者在介面上改出來、正要修回去的列
+  const seenLv = new Set();
+  d.levels = (Array.isArray(d.levels) ? d.levels : []).filter(l => {
+    if(!isPlainObj(l)){ c.dropped++; return false; }
+    l.level = numField(l.level, {bad:0, badtype:0});      // 無效的等級整列另外算，不重複計入
+    if(importing){
+      if(!Number.isFinite(l.level)){ c.badlv++; return false; }
+      if(seenLv.has(l.level)){ c.duplv++; return false; }
+      seenLv.add(l.level);
+    }
+    if("required" in l) l.required = numField(l.required, c);
+    if("confidence" in l) l.confidence = textField(l.confidence);
+    if("note" in l) l.note = textField(l.note);
+    return true;
   });
+
+  // 人員 id 整理後可能撞在一起（"a " 和 "a"、數字 1 和字串 "1"）。撞到就換一個新 id，
+  // 並用對照表讓記錄的 workerId 跟著換 —— 兩個人不能被併成一個。
+  // 對照表用「型別＋原始值」當鍵，跟以前用 === 比對的結果一致
+  const wkey = v => typeof v + ":" + safeStr(v);
+  const widMap = new Map(), seenW = new Set();
+  d.workers = (Array.isArray(d.workers) ? d.workers : []).filter(w => {
+    if(!isPlainObj(w)){ c.dropped++; return false; }
+    const raw = w.id;
+    let id = cleanId(raw);
+    if(seenW.has(id)){ let k = 2; while(seenW.has(id + "_" + k)) k++; id = id + "_" + k; c.rewid++; }
+    seenW.add(id);
+    if(!widMap.has(wkey(raw))) widMap.set(wkey(raw), id);    // 原始 id 完全相同時，記錄對到第一位（跟以前 find 一樣）
+    w.id = id;
+    if("name" in w) w.name = textField(w.name);
+    if("note" in w) w.note = textField(w.note);
+    if("hourlyRate" in w) w.hourlyRate = numField(w.hourlyRate, c);
+    if("billable" in w && typeof w.billable !== "boolean") w.billable = !!w.billable;
+    return true;
+  });
+
+  const seenId = new Set();
+  const newId = () => { let id; do{ id = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }while(seenId.has(id)); return id; };
+  d.sessions = (Array.isArray(d.sessions) ? d.sessions : []).filter(s => {
+    if(!isPlainObj(s)){ c.dropped++; return false; }
+    // 改、刪用 id 找記錄：沒有 id 就自動編號；重複的會找錯筆，也重新編號（記錄的 id 沒有被其他地方參照）
+    let id = cleanId(s.id);
+    if(!id){ id = newId(); c.newid++; }
+    else if(seenId.has(id)){ id = newId(); c.reid++; }
+    seenId.add(id); s.id = id;
+    if("date" in s){
+      const nd = normDate(s.date);
+      if(nd){ if(nd !== s.date) c.padded++; s.date = nd; }
+      else { c.baddate++; s.date = (s.date !== null && typeof s.date === "object") ? "" : safeStr(s.date); }
+    }
+    for(const k of ["start","end","gainedPct","level"]) if(k in s) s[k] = numField(s[k], c);
+    // 沒有 workerId 的記錄也要經過對照表：沒有 id 的人員會被整理成 ""，兩邊才對得上
+    s.workerId = widMap.has(wkey(s.workerId)) ? widMap.get(wkey(s.workerId)) : cleanId(s.workerId);
+    if("note" in s) s.note = textField(s.note);
+    // 沒有 enabled 欄位的一律視為啟用（舊檔匯入、種子資料都走這裡）
+    s.enabled = s.enabled !== false;
+    // 計費時數：空值代表「跟時段一樣」。認不得、負數或型別不對時也當成空值，另外記下來
+    const cb = {bad:0, badtype:0};
+    const b = numField(s.billableHours, cb);
+    if(typeof b === "number" && Number.isFinite(b) && b >= 0) s.billableHours = b;
+    else { if(b != null || cb.badtype) c.badbh++; s.billableHours = null; }
+    return true;
+  });
+
+  if(importing){
+    // warn=false 的是無害的整理（補零、自動編號），其他代表有資料被拿掉或認不得
+    const add = (msg, warn=true) => issues.push({msg, warn});
+    if(c.dropped) add(`略過 ${c.dropped} 個不是記錄的項目`);
+    if(c.newid)   add(`${c.newid} 筆記錄沒有 id，已自動編號`, false);
+    if(c.reid)    add(`${c.reid} 筆記錄的 id 重複，已重新編號`);
+    if(c.rewid)   add(`${c.rewid} 位人員的 id 整理後重複，已改成不同的 id`);
+    if(c.padded)  add(`${c.padded} 筆日期已補成標準格式`, false);
+    if(c.baddate) add(`${c.baddate} 筆日期無法辨識（保留原樣，每日進度頁列在「日期不明」）`);
+    if(c.bad)     add(`${c.bad} 個數值無法辨識（保留原樣，計算時不採用）`);
+    if(c.badtype) add(`${c.badtype} 個數值欄位的型別不對（物件、陣列或布林），已拿掉`);
+    if(c.badbh)   add(`${c.badbh} 筆計費時數無法辨識或是負數，已改成跟時段相同`);
+    if(c.badtext) add(`${c.badtext} 個文字欄位的型別不對（物件或陣列），已清空`);
+    if(c.badlv)   add(`略過 ${c.badlv} 筆沒有有效等級的等級表列`);
+    if(c.duplv)   add(`略過 ${c.duplv} 筆重複的等級`);
+  }
   return d;
 }
 function persist(){
+  // 原本的資料讀不出來時暫停自動儲存，免得使用者一操作就把它蓋掉
+  if(loadProblem){ setSaveState("原本的資料讀不出來，自動儲存已暫停"); return; }
   db.meta.updatedAt = new Date().toISOString();
   try{
     localStorage.setItem(STORE_KEY, JSON.stringify(db));
@@ -571,9 +703,10 @@ const num = n => Number(n);
 /* 獲得% 不是數字（"5%"、缺欄位）就當 0，不能讓 NaN 把後面的累計歸零；
    等級是 null／空字串時 Number() 會變成 0，要當成「沒有等級」而不是 0 級 */
 const pctOf = s => { const p = num(s.gainedPct); return Number.isFinite(p) ? (p || 0) : 0; };   // p||0 把 -0 變成 0
+const numOrNaN = v => (v == null || v === "") ? NaN : num(v);
 const lvOf  = s => (s.level == null || String(s.level).trim() === "") ? NaN : num(s.level);
 function hoursOf(s){
-  const a = num(s.start), b = num(s.end);
+  const a = numOrNaN(s.start), b = numOrNaN(s.end);
   if(!isFinite(a)||!isFinite(b)) return 0;
   return b >= a ? b - a : b + 24 - a;
 }
@@ -594,38 +727,44 @@ function derive(s){
   const bh = billHoursOf(s);
   const li = levelInfo(s.level);
   const req = li ? num(li.required) : 0;
-  const units = req ? num(s.gainedPct)/100*req : 0;
+  const units = req ? pctOf(s)/100*req : 0;
   const w = workerOf(s.workerId);
   const rate = w && w.billable ? num(w.hourlyRate)||0 : 0;
   const cost = bh * rate;
   return {
     hours:h, billHours:bh, adjusted: bh!==h, required:req, units,
     unitsPerHour: bh>0 ? units/bh : 0,
-    pctPerHour: bh>0 ? num(s.gainedPct)/bh : 0,
+    pctPerHour: bh>0 ? pctOf(s)/bh : 0,
     cost,
     costPerMUnit: units>0 ? cost/(units/1e6) : 0,
     estimated: li ? li.confidence==="estimated" : false,
     worker:w
   };
 }
+const startKey = s => { const n = numOrNaN(s.start); return Number.isFinite(n) ? n : Infinity; };
+function byStart(a,b){ const x = startKey(a), y = startKey(b); return x === y ? 0 : (x < y ? -1 : 1); }
 function sorted(){
-  return db.sessions.slice().sort((a,b)=>
-    (a.date===b.date) ? num(a.start)-num(b.start) : (a.date<b.date?-1:1));
+  return db.sessions.slice().sort((a,b)=>{
+    const x = safeStr(a.date), y = safeStr(b.date);
+    return x === y ? byStart(a,b) : (x < y ? -1 : 1);
+  });
 }
 /* 只有勾了「啟用」的記錄才列入統計 */
 const isOn = s => s.enabled !== false;
 function activeSorted(){ return sorted().filter(isOn); }
 
 /* ---------- format ---------- */
-const fmt0 = n => (isFinite(n)?Math.round(n):0).toLocaleString("en-US");
-const fmt1 = n => (isFinite(n)?n:0).toLocaleString("en-US",{minimumFractionDigits:1,maximumFractionDigits:1});
+/* 轉成可顯示的數字；null、文字、物件一律當 0，不會丟例外 */
+const fin = n => { try{ const x = Number(n); return Number.isFinite(x) ? x : 0; }catch(e){ return 0; } };
+const fmt0 = n => Math.round(fin(n)).toLocaleString("en-US");
+const fmt1 = n => fin(n).toLocaleString("en-US",{minimumFractionDigits:1,maximumFractionDigits:1});
 // 百分比一律 4 位小數；時數仍用 fmt1（6.5H 不需要 6.5000H）
-const fmt2 = n => (isFinite(n)?n:0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmt4 = n => (isFinite(n)?n:0).toLocaleString("en-US",{minimumFractionDigits:4,maximumFractionDigits:4});
+const fmt2 = n => fin(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt4 = n => fin(n).toLocaleString("en-US",{minimumFractionDigits:4,maximumFractionDigits:4});
 function weekday(d){ const t=new Date(d+"T00:00:00"); return isNaN(t)?"":WEEK[t.getDay()]; }
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function esc(s){ return safeStr(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function hhmm(v){
-  const n = num(v); if(!isFinite(n)) return "";
+  const n = numOrNaN(v); if(!isFinite(n)) return "";
   const h = Math.floor(n), m = Math.round((n-h)*60);
   return m ? `${h}:${String(m).padStart(2,"0")}` : String(h);
 }
@@ -715,7 +854,7 @@ function renderWorkers(){
     const mine = act.filter(s=>s.workerId===w.id);
     const ss = mine.map(derive);
     const hours = ss.reduce((a,d)=>a+d.billHours,0);
-    const pct   = mine.reduce((a,s)=>a+num(s.gainedPct),0);
+    const pct   = mine.reduce((a,s)=>a+pctOf(s),0);
     const units = ss.reduce((a,d)=>a+d.units,0);
     const cost  = ss.reduce((a,d)=>a+d.cost,0);
     return {w,hours,pct,units,cost,
@@ -1062,6 +1201,23 @@ document.getElementById("btnAddLevel").addEventListener("click", ()=>{
 });
 
 /* ---------- file io ---------- */
+/* 換成新資料時先在畫面上試畫一次，成功才寫進 localStorage。
+   以前是先存再畫，畫面一出錯就顯示「讀不了這個檔案」，資料卻已經被換掉了。 */
+function applyLoaded(d){
+  const prev = {db, editingId, page, dayPage};
+  db = d; editingId = null; page = 1; dayPage = 1;
+  try{ render(); }
+  catch(err){ ({db, editingId, page, dayPage} = prev); render(); throw err; }
+  loadProblem = null;      // 使用者主動換了資料，恢復自動儲存
+  resetEditUI();
+  persist();
+}
+/* 換了整份資料後，表單不能還停在「儲存修改」—— editingId 已經清掉，再按會變成新增一筆 */
+function resetEditUI(){
+  document.getElementById("btnSave").textContent = "新增記錄";
+  document.getElementById("btnCancel").hidden = true;
+  formMsg("");
+}
 function ioMsg(t,cls){
   const el = document.getElementById("ioMsg");
   el.textContent = t||""; el.className = "msg"+(cls?" "+cls:"");
@@ -1104,10 +1260,11 @@ document.getElementById("fileInput").addEventListener("change", e=>{
   const r = new FileReader();
   r.onload = () => {
     try{
-      const d = normalize(JSON.parse(r.result));
+      const issues = [];
+      const d = normalize(JSON.parse(r.result), issues);
       if(!d.sessions.length && !d.levels.length) throw new Error("看起來不是 grind-log 檔案");
-      db = d; editingId = null; page = 1; dayPage = 1; persist(); render();
-      ioMsg(`已匯入 ${d.sessions.length} 筆記錄`,"ok");
+      applyLoaded(d);
+      ioMsg(`已匯入 ${d.sessions.length} 筆記錄` + (issues.length ? `；自動整理：${issues.map(i=>i.msg).join("、")}` : ""), issues.some(i=>i.warn) ? "err" : "ok");
     }catch(err){ ioMsg("讀不了這個檔案："+err.message,"err"); }
   };
   r.readAsText(f);
@@ -1117,14 +1274,14 @@ document.getElementById("fileInput").addEventListener("change", e=>{
    所以給一個明確的還原入口，不必開 DevTools。 */
 document.getElementById("btnDemo").addEventListener("click", ()=>{
   if(!confirm("用示範資料覆蓋目前的內容？現有的記錄、人員、等級表都會被取代，建議先匯出 JSON 備份。")) return;
-  db = normalize(seed()); editingId = null; page = 1; dayPage = 1; persist(); render();
+  db = normalize(seed()); editingId = null; page = 1; dayPage = 1; loadProblem = null; resetEditUI(); persist(); render();
   ioMsg(`已還原示範資料（${db.sessions.length} 筆）`,"ok");
 });
 
 document.getElementById("btnReset").addEventListener("click", ()=>{
   if(!confirm("全部歸零？記錄、人員、等級表都會清掉，變成完全空白。\n要回到範例狀態請改按「還原示範資料」。建議先匯出 JSON 備份。")) return;
   db = {schema:"grind-log/v1",meta:{title:"練功記錄",unit:"exp",currency:"TWD"},levels:[],workers:[],sessions:[]};
-  page = 1; dayPage = 1; persist(); render();
+  editingId = null; page = 1; dayPage = 1; loadProblem = null; resetEditUI(); persist(); render();
   ioMsg("已清空。要回到示範資料，按「還原示範資料」","ok");
 });
 
@@ -1142,8 +1299,11 @@ if(window.grindLogNative){
     if(r.canceled) return;
     if(!r.ok){ ioMsg("開檔失敗："+r.error,"err"); return; }
     try{
-      db = normalize(JSON.parse(r.text)); editingId=null; page = 1; dayPage = 1; persist(); render();
-      ioMsg("已開啟 "+r.path,"ok");
+      const issues = [];
+      const d = normalize(JSON.parse(r.text), issues);
+      if(!d.sessions.length && !d.levels.length) throw new Error("看起來不是 grind-log 檔案");
+      applyLoaded(d);
+      ioMsg("已開啟 "+r.path + (issues.length ? `；自動整理：${issues.map(i=>i.msg).join("、")}` : ""), issues.some(i=>i.warn) ? "err" : "ok");
     }catch(err){ ioMsg("檔案格式不對："+err.message,"err"); }
   });
 }
@@ -1187,7 +1347,7 @@ function addDays(d, n){
 /* 把日期整理成標準的 YYYY-MM-DD。匯入的 JSON 可能沒補零（2026-9-5）、前後有空白，
    或根本不存在（9/31 會被 Date 進位成 10/1）；認不得的一律回傳 null，不猜。 */
 function normDate(v){
-  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(v == null ? "" : v).trim());
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(safeStr(v).trim());
   if(!m) return null;
   const iso = `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
   const t = new Date(iso + "T00:00:00Z");
@@ -1197,7 +1357,7 @@ function normDate(v){
 /* 一天的彙總。合計只算啟用的記錄。獲得% 依等級分開加總 —— 不同等級的 1% 代表的
    經驗量不同，跨等級的那天不能把 % 相加；經驗值則可以。 */
 function dayRow(date, ss){
-  ss = ss.slice().sort((a,b)=>num(a.start)-num(b.start));
+  ss = ss.slice().sort(byStart);
   const on = ss.filter(isOn);
   const dv = on.map(derive);
   const pctByLv = new Map();
@@ -1223,7 +1383,7 @@ function dayRow(date, ss){
     estimated: levels.some(lv => { const li = levelInfo(lv); return li && li.confidence === "estimated"; }),
     notes,
     // 日期認不得的那一組，把原始字串留著給使用者對照修正
-    rawDates: date ? [] : [...new Set(ss.map(s=>String(s.date == null ? "（空白）" : s.date)))]
+    rawDates: date ? [] : [...new Set(ss.map(s=>safeStr(s.date).trim() || "（空白）"))]
   };
 }
 
@@ -1290,7 +1450,7 @@ function addCumulative(rows){
    計費時數跟時段不同時畫完整時段 —— 休息發生在哪個時間點不知道，不能亂切。 */
 function segHtml(s){
   const d = derive(s);
-  const a = num(s.start), b = num(s.end);
+  const a = numOrNaN(s.start), b = numOrNaN(s.end);
   if(!isFinite(a) || !isFinite(b)) return "";     // 起訖不是數字就不畫，免得輸出無效的 style
   const toMidnight = b === 0 && a > 0;             // 例如 18 到 0：剛好在午夜結束，不算跨到翌日
   const cross = b < a && !toMidnight;
@@ -1426,7 +1586,16 @@ document.getElementById("dayLinks").addEventListener("click", e=>{
 /* ---------- boot ---------- */
 document.getElementById("f-date").value = new Date().toISOString().slice(0,10);
 applyTab();
-render();
+try{ render(); }
+catch(err){
+  console.error("畫面無法完整顯示", err);
+  ioMsg("資料有問題，畫面無法完整顯示。請先「匯出 JSON」備份，再「還原示範資料」或匯入正確的檔案。","err");
+}
+if(loadProblem){
+  ioMsg(loadProblem.saved
+    ? "原本存的資料讀不出來，已另外備份，不會被覆蓋。自動儲存暫停中，現在的修改不會存下來；匯入 JSON、還原示範資料或清空全部之後恢復。"
+    : "原本存的資料讀不出來，而且儲存空間不足、無法另外備份。原本的內容還留著，自動儲存暫停中；注意：匯入 JSON、還原示範資料或清空全部會把它蓋掉。","err");
+}
 </script>
 </body>
 </html>
