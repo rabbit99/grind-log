@@ -71,8 +71,9 @@
   .stat .v.gold{color:var(--gold)}
   .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--bone-dim)}
   /* 很長又沒有空白的名稱（或找不到人員時顯示的 id）要能折行，不然手機上會把整頁撐寬 */
-  .legend span{display:inline-flex;align-items:center;gap:6px;min-width:0;word-break:break-word;overflow-wrap:anywhere}
-  .legend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none}
+  .legend span{display:inline-flex;align-items:flex-start;gap:6px;min-width:0;word-break:break-word;overflow-wrap:anywhere}
+  /* 色塊對齊第一行，名稱折成多行時不會跑到中間；單行時跟置中的位置一樣（行高 12px × 1.55） */
+  .legend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none;margin-top:calc((12px * 1.55 - 9px) / 2)}
 
   /* ---------- layout ---------- */
   .cols{display:grid;grid-template-columns:320px 1fr;gap:22px;align-items:start}
@@ -134,7 +135,7 @@
   button.danger:hover{border-color:var(--crimson);color:#E39A96}
   button.sm{padding:3px 8px;font-size:12px}
   .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-  .msg{font-size:12.5px;margin-top:9px;min-height:1.2em}
+  .msg{font-size:12.5px;margin-top:9px;min-height:1.2em;overflow-wrap:anywhere}
   .msg.err{color:#E39A96}
   .msg.ok{color:var(--jade)}
 
@@ -170,6 +171,8 @@
   /* 記錄表：左右內距 6px，最窄從約 912px 縮到約 834px，1280px 以上的視窗放得下、不用左右捲 */
   #tblSessions th:not(.cb),#tblSessions td:not(.cb){padding-left:6px;padding-right:6px}
   #tblSessions td.note{white-space:normal;max-width:180px}
+  /* 表格已經要左右捲時，備註欄不必再擠：留最小寬度，長備註不會變成一行一兩個字、把列撐很高 */
+  .is-scroll #tblSessions td.note{min-width:10em}
   .empty{padding:26px var(--pad);color:var(--bone-dim);font-size:13px}
 
   /* ---------- 啟用勾選 ---------- */
@@ -239,8 +242,8 @@
   /* ---------- 每日進度頁 ---------- */
   .dlegend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:12px var(--pad) 6px;font-size:12px;color:var(--bone-dim)}
   /* 跟經驗條圖例一樣：很長的名稱或 id 要能折行 */
-  .dlegend span{display:inline-flex;align-items:center;gap:6px;min-width:0;word-break:break-word;overflow-wrap:anywhere}
-  .dlegend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none}
+  .dlegend span{display:inline-flex;align-items:flex-start;gap:6px;min-width:0;word-break:break-word;overflow-wrap:anywhere}
+  .dlegend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none;margin-top:calc((12px * 1.55 - 9px) / 2)}
   .dlegend .dim{margin-left:auto}
   #tblDaily td{vertical-align:middle}
   #tblDaily th.tlcell,#tblDaily td.tlcell{width:50%;min-width:260px;text-align:left}
