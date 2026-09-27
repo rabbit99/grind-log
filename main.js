@@ -30,12 +30,12 @@ function buildMenu() {
         {
           label: "開啟…",
           accelerator: "CmdOrCtrl+O",
-          click: () => win && win.webContents.send("menu:open"),
+          click: () => win && !win.isDestroyed() && win.webContents.send("menu:open"),
         },
         {
           label: "另存新檔…",
           accelerator: "CmdOrCtrl+S",
-          click: () => win && win.webContents.send("menu:save"),
+          click: () => win && !win.isDestroyed() && win.webContents.send("menu:save"),
         },
         { type: "separator" },
         isMac ? { role: "close" } : { role: "quit" },

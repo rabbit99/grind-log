@@ -1490,15 +1490,25 @@ document.getElementById("btnReset").addEventListener("click", ()=>{
    瀏覽器版一律用「匯出 JSON / 匯入 JSON」，按鈕維持隱藏。 */
 if(window.grindLogNative){
   document.getElementById("nativeRow").hidden = false;
+  // 對話框開著時不再開第二個（macOS 的對話框不會擋住選單列，快捷鍵、連點都可能再叫一次）
+  let nativeBusy = false;
   document.getElementById("btnSaveFile").addEventListener("click", async ()=>{
-    db.meta.updatedAt = new Date().toISOString();
-    const r = await window.grindLogNative.save(JSON.stringify(db,null,2));
-    if(r.ok && loadProblem) ioMsg("已存到 "+r.path+" —— 這是目前畫面上的資料，不是讀不出來的原始內容，那份請按上方的「下載原始內容」","err");
-    else ioMsg(r.ok? "已存到 "+r.path : (r.canceled? "" : "存檔失敗："+r.error), r.ok?"ok":"err");
+    if(nativeBusy) return;
+    nativeBusy = true;
+    try{
+      db.meta.updatedAt = new Date().toISOString();
+      const r = await window.grindLogNative.save(JSON.stringify(db,null,2));
+      if(r.ok && loadProblem) ioMsg("已存到 "+r.path+" —— 這是目前畫面上的資料，不是讀不出來的原始內容，那份請按上方的「下載原始內容」","err");
+      else ioMsg(r.ok? "已存到 "+r.path : (r.canceled? "" : "存檔失敗："+r.error), r.ok?"ok":"err");
+    }finally{ nativeBusy = false; }
   });
   document.getElementById("btnOpenFile").addEventListener("click", async ()=>{
+    if(nativeBusy) return;
     if(!confirmReplaceUnreadable()) return;
-    const r = await window.grindLogNative.open();
+    nativeBusy = true;
+    let r;
+    try{ r = await window.grindLogNative.open(); }
+    finally{ nativeBusy = false; }
     if(r.canceled) return;
     if(!r.ok){ ioMsg("開檔失敗："+r.error,"err"); return; }
     try{
@@ -1511,6 +1521,10 @@ if(window.grindLogNative){
   });
   // 選單的「開啟…」「另存新檔…」（Ctrl+O／Ctrl+S）跟按鈕走同一段程式，讀不出原本資料時的確認也一樣
   if(window.grindLogNative.onMenu) window.grindLogNative.onMenu(cmd=>{
+    // 人員表、等級表的輸入框要離開（change）才把修改寫進 db。用滑鼠點按鈕時會先離開，
+    // 快捷鍵不會 —— 不先讓它離開，存出來的檔案會少掉剛改的那一格
+    const a = document.activeElement;
+    if(a && a !== document.body && a.blur) a.blur();
     if(cmd === "open") document.getElementById("btnOpenFile").click();
     else if(cmd === "save") document.getElementById("btnSaveFile").click();
   });
