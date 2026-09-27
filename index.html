@@ -1054,9 +1054,9 @@ function syncBhField(){
   const id = document.getElementById("f-worker").value;
   const w = workerOf(id);
   const wrap = document.getElementById("f-bh-wrap");
-  // 找不到的人員（見 fillWorkerSelect）不知道是不是計費的：欄位照樣顯示，
-  // 不然會把正在修改的記錄原本的計費時數清掉
-  const show = w ? !!w.billable : id !== "";
+  // 找不到的人員（見 fillWorkerSelect），或正在修改的記錄沒有人員：不知道是不是計費的，
+  // 欄位照樣顯示，不然會把記錄原本的計費時數清掉
+  const show = w ? !!w.billable : (id !== "" || !!editingId);
   wrap.hidden = !show;
   if(!show){ document.getElementById("f-bh").value = ""; return; }
   const a = parseFloat(document.getElementById("f-start").value);
@@ -1072,10 +1072,16 @@ document.getElementById("f-end").addEventListener("input", syncBhField);
    不能讓瀏覽器自動跳到第一位 —— 正在修改的記錄一按「儲存修改」，就悄悄變成別人的了 */
 function fillWorkerSelect(keep = document.getElementById("f-worker").value){
   const sel = document.getElementById("f-worker");
-  const missing = keep !== "" && !db.workers.some(w=>w.id===keep);
+  const cur = editingId ? db.sessions.find(s=>s.id===editingId) : null;
+  // 要留在選單上的「找不到」：正在修改的記錄原本的人員（改選別人後還能選回來），以及目前選著的那位。
+  // 新增模式下名單全空時不留 —— 沒人可選，該提示的是先新增人員
+  const missing = [];
+  for(const id of [cur ? safeStr(cur.workerId) : "", keep])
+    if(id !== "" && !workerOf(id) && !missing.includes(id) && (cur || db.workers.length)) missing.push(id);
   sel.innerHTML = db.workers.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")
-    + (missing ? `<option value="${esc(keep)}">（找不到這位人員）</option>` : "");
-  if(keep !== "") sel.value = keep;
+    + missing.map(id=>`<option value="${esc(id)}">（找不到這位人員：${esc(id)}）</option>`).join("");
+  // keep 是 "" 時，新增模式交給瀏覽器選第一位；修改模式不行 —— 沒有人員的記錄會悄悄變成第一位，要保持空白
+  if(keep !== "" || cur) sel.value = keep;
   syncBhField();
 }
 
@@ -1100,7 +1106,7 @@ function validate(v){
   if(!v.date) return "選一個日期";
   if(!isFinite(v.start)||!isFinite(v.end)) return "填起迄時間";
   if(v.start===v.end) return "起迄時間不能相同";
-  if(!v.workerId) return "先在下方「人員與時薪」新增人員";
+  if(!v.workerId) return db.workers.length ? "選一位人員" : "先在下方「人員與時薪」新增人員";
   // 選的是「找不到這位人員」：修改時保留記錄原本的人員可以，其他情況要重新選
   if(!workerOf(v.workerId)){
     const cur = editingId ? db.sessions.find(s=>s.id===editingId) : null;
@@ -1315,7 +1321,7 @@ function resetEditUI(){
   formMsg("");
   // 不在修改了：人員選單不用再保留「找不到這位人員」，回到預設的第一位
   const sel = document.getElementById("f-worker");
-  if(!workerOf(sel.value)) fillWorkerSelect("");
+  if(sel.selectedIndex < 0 || !workerOf(sel.value)) fillWorkerSelect("");
 }
 function ioMsg(t,cls){
   const el = document.getElementById("ioMsg");
