@@ -752,15 +752,18 @@ function normalize(d, issues){
   }
   return d;
 }
+/* 回傳有沒有真的寫進 localStorage */
 function persist(){
   // 原本的資料讀不出來時暫停自動儲存，免得使用者一操作就把它蓋掉
-  if(loadProblem){ setSaveState("原本的資料讀不出來，自動儲存已暫停"); return; }
+  if(loadProblem){ setSaveState("原本的資料讀不出來，自動儲存已暫停"); return false; }
   db.meta.updatedAt = new Date().toISOString();
   try{
     localStorage.setItem(STORE_KEY, JSON.stringify(db));
     setSaveState("已存到這台電腦");
+    return true;
   }catch(e){
     setSaveState("無法自動儲存，請用「匯出 JSON」保留資料");
+    return false;
   }
 }
 let saveTimer;
@@ -1352,16 +1355,28 @@ document.getElementById("btnAddLevel").addEventListener("click", ()=>{
 /* ---------- file io ---------- */
 /* 換成新資料時先在畫面上試畫一次，成功才寫進 localStorage。
    以前是先存再畫，畫面一出錯就顯示「讀不了這個檔案」，資料卻已經被換掉了。 */
+/* 使用者主動換了整份資料（匯入、開檔、還原示範資料、清空全部）後恢復自動儲存，回傳有沒有寫進去。
+   寫入失敗時（例如儲存空間不足），讀不出來的原文還留在 localStorage 沒被蓋掉：提示要放回去、
+   繼續暫停自動儲存，不然「下載原始內容」按不到，之後哪次存檔成功就把原文蓋掉了 */
+function resumeSaving(){
+  const prev = loadProblem;
+  loadProblem = null;
+  const ok = persist();
+  if(!ok && prev) loadProblem = prev;
+  syncLoadBanner();
+  return ok;
+}
+/* 換成新資料。回傳有沒有寫進這台電腦（見 resumeSaving） */
 function applyLoaded(d){
   const prev = {db, editingId, page, dayPage};
   db = d; editingId = null; page = 1; dayPage = 1;
   try{ render(); }
   catch(err){ ({db, editingId, page, dayPage} = prev); render(); throw err; }
-  loadProblem = null;      // 使用者主動換了資料，恢復自動儲存
-  syncLoadBanner();
   resetEditUI(); lvMsg("");
-  persist();
+  return resumeSaving();
 }
+/* 換了資料卻寫不進去時，接在成功訊息後面的說明 */
+const NOT_SAVED = "；但寫不進這台電腦（可能是儲存空間不足），請先用「匯出 JSON」另存一份";
 /* 表格比外框寬（要左右捲）時加上 is-scroll，改／刪才固定在右側（見 CSS 的 .act）。
    外框大小（視窗、頁籤、展開收合）和表格內容（重畫）都會改變它，兩個都要看 */
 const scrollRO = new ResizeObserver(entries=>{
@@ -1494,8 +1509,9 @@ document.getElementById("fileInput").addEventListener("change", e=>{
       const issues = [];
       const d = normalize(JSON.parse(r.result), issues);
       if(!d.sessions.length && !d.levels.length) throw new Error("看起來不是 grind-log 檔案");
-      applyLoaded(d);
-      ioMsg(`已匯入 ${d.sessions.length} 筆記錄` + (issues.length ? `；自動整理：${issues.map(i=>i.msg).join("、")}` : ""), issues.some(i=>i.warn) ? "err" : "ok");
+      const saved = applyLoaded(d);
+      ioMsg(`已匯入 ${d.sessions.length} 筆記錄` + (issues.length ? `；自動整理：${issues.map(i=>i.msg).join("、")}` : "") + (saved ? "" : NOT_SAVED),
+        !saved || issues.some(i=>i.warn) ? "err" : "ok");
     }catch(err){ ioMsg("讀不了這個檔案："+err.message,"err"); }
   };
   r.readAsText(f);
@@ -1505,15 +1521,17 @@ document.getElementById("fileInput").addEventListener("change", e=>{
    所以給一個明確的還原入口，不必開 DevTools。 */
 document.getElementById("btnDemo").addEventListener("click", ()=>{
   if(!confirm("用示範資料覆蓋目前的內容？現有的記錄、人員、等級表都會被取代。" + backupAdvice())) return;
-  db = normalize(seed()); editingId = null; page = 1; dayPage = 1; loadProblem = null; syncLoadBanner(); resetEditUI(); lvMsg(""); persist(); render();
-  ioMsg(`已還原示範資料（${db.sessions.length} 筆）`,"ok");
+  db = normalize(seed()); editingId = null; page = 1; dayPage = 1; resetEditUI(); lvMsg("");
+  const saved = resumeSaving(); render();
+  ioMsg(`已還原示範資料（${db.sessions.length} 筆）` + (saved ? "" : NOT_SAVED), saved ? "ok" : "err");
 });
 
 document.getElementById("btnReset").addEventListener("click", ()=>{
   if(!confirm("全部歸零？記錄、人員、等級表都會清掉，變成完全空白。\n要回到範例狀態請改按「還原示範資料」。" + backupAdvice())) return;
   db = {schema:"grind-log/v1",meta:{title:"練功記錄",unit:"exp",currency:"TWD"},levels:[],workers:[],sessions:[]};
-  editingId = null; page = 1; dayPage = 1; loadProblem = null; syncLoadBanner(); resetEditUI(); lvMsg(""); persist(); render();
-  ioMsg("已清空。要回到示範資料，按「還原示範資料」","ok");
+  editingId = null; page = 1; dayPage = 1; resetEditUI(); lvMsg("");
+  const saved = resumeSaving(); render();
+  ioMsg(saved ? "已清空。要回到示範資料，按「還原示範資料」" : "已清空" + NOT_SAVED, saved ? "ok" : "err");
 });
 
 /* ---------- Electron 專用的開檔／存檔 ----------
@@ -1530,7 +1548,10 @@ if(window.grindLogNative){
       const r = await window.grindLogNative.save(JSON.stringify(db,null,2));
       if(r.ok && loadProblem) ioMsg("已存到 "+r.path+" —— 這是目前畫面上的資料，不是讀不出來的原始內容，那份請按上方的「下載原始內容」","err");
       else ioMsg(r.ok? "已存到 "+r.path : (r.canceled? "" : "存檔失敗："+r.error), r.ok?"ok":"err");
-    }finally{ nativeBusy = false; }
+    }
+    // 對話框本身出錯（主程序丟例外）時也要讓使用者知道，不然只有 console 看得到
+    catch(err){ ioMsg("存檔失敗："+(safeStr(err && err.message) || "不明原因"),"err"); }
+    finally{ nativeBusy = false; }
   });
   document.getElementById("btnOpenFile").addEventListener("click", async ()=>{
     if(nativeBusy) return;
@@ -1538,6 +1559,7 @@ if(window.grindLogNative){
     nativeBusy = true;
     let r;
     try{ r = await window.grindLogNative.open(); }
+    catch(err){ ioMsg("開檔失敗："+(safeStr(err && err.message) || "不明原因"),"err"); return; }
     finally{ nativeBusy = false; }
     if(r.canceled) return;
     if(!r.ok){ ioMsg("開檔失敗："+r.error,"err"); return; }
@@ -1545,8 +1567,9 @@ if(window.grindLogNative){
       const issues = [];
       const d = normalize(JSON.parse(r.text), issues);
       if(!d.sessions.length && !d.levels.length) throw new Error("看起來不是 grind-log 檔案");
-      applyLoaded(d);
-      ioMsg("已開啟 "+r.path + (issues.length ? `；自動整理：${issues.map(i=>i.msg).join("、")}` : ""), issues.some(i=>i.warn) ? "err" : "ok");
+      const saved = applyLoaded(d);
+      ioMsg("已開啟 "+r.path + (issues.length ? `；自動整理：${issues.map(i=>i.msg).join("、")}` : "") + (saved ? "" : NOT_SAVED),
+        !saved || issues.some(i=>i.warn) ? "err" : "ok");
     }catch(err){ ioMsg("檔案格式不對："+err.message,"err"); }
   });
   // 選單的「開啟…」「另存新檔…」（Ctrl+O／Ctrl+S）跟按鈕走同一段程式，讀不出原本資料時的確認也一樣
