@@ -1344,15 +1344,17 @@ document.getElementById("btnExport").addEventListener("click", ()=>{
     : "已匯出 JSON", loadProblem ? "err" : "ok");
 });
 /* CSV 的一格。
-   試算表會把 = + - @（以及 Tab、換行）開頭的內容當成公式執行。人員名稱、備註，還有匯入檔裡
-   認不得、原樣保留的日期或數值，都可能被做成會開連結、讀其他格的公式 —— 這類文字前面加一個 '，
-   讓試算表當成純文字。數字（包括 -1.5 這種負數）照原樣輸出。
-   含逗號、引號、換行的用引號包起來，免得欄位錯位；quote 為 true 時一律包。 */
+   試算表會把 = + - @（以及 Tab、換行）開頭的內容當成公式執行；OWASP 另外提醒全形的 ＝＋－＠
+   在部分語系也可能被當成公式。人員名稱、備註，還有匯入檔裡認不得、原樣保留的日期或數值，
+   都可能被做成會開連結、讀其他格的公式 —— 這類文字前面加一個 '，讓試算表當成純文字。
+   數字（包括 -1.5 這種負數）照原樣輸出。
+   含逗號、引號、換行的用引號包起來，免得欄位錯位；分號、Tab 也包，用它們當分隔字元的
+   試算表才不會從中間切開；quote 為 true 時一律包。 */
 function csvCell(v, quote){
   if(typeof v === "number") return String(v);
   let t = safeStr(v);
-  if(/^[=+\-@\t\r\n]/.test(t) && !/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t)) t = "'" + t;
-  return quote || /[",\r\n]/.test(t) ? `"${t.replace(/"/g,'""')}"` : t;
+  if(/^[=+\-@\t\r\n＝＋－＠]/.test(t) && !/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t)) t = "'" + t;
+  return quote || /[",;\t\r\n]/.test(t) ? `"${t.replace(/"/g,'""')}"` : t;
 }
 document.getElementById("btnCsv").addEventListener("click", ()=>{
   const head = ["日期","星期","起","迄","時數","計費時數","人員","等級","獲得%","該級升級經驗","獲得經驗","每小時經驗","每小時%","費用","每百萬經驗成本","備註","啟用"];
@@ -1364,7 +1366,7 @@ document.getElementById("btnCsv").addEventListener("click", ()=>{
       c(s.date), c(weekday(s.date)), c(s.start), c(s.end), c(d.hours), c(d.billHours),
       q(d.worker ? d.worker.name : "?"),
       c(s.level), c(s.gainedPct), c(d.required), c(Math.round(d.units)),
-      c(Math.round(d.unitsPerHour)), c(d.pctPerHour.toFixed(4)),
+      c(Math.round(d.unitsPerHour)), c(Number.isFinite(d.pctPerHour) ? d.pctPerHour.toFixed(4) : d.pctPerHour),
       c(Math.round(d.cost)), c(Math.round(d.costPerMUnit)),
       q(s.note || ""),
       c(isOn(s) ? "是" : "否")
