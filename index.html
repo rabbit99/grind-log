@@ -1509,6 +1509,11 @@ if(window.grindLogNative){
       ioMsg("已開啟 "+r.path + (issues.length ? `；自動整理：${issues.map(i=>i.msg).join("、")}` : ""), issues.some(i=>i.warn) ? "err" : "ok");
     }catch(err){ ioMsg("檔案格式不對："+err.message,"err"); }
   });
+  // 選單的「開啟…」「另存新檔…」（Ctrl+O／Ctrl+S）跟按鈕走同一段程式，讀不出原本資料時的確認也一樣
+  if(window.grindLogNative.onMenu) window.grindLogNative.onMenu(cmd=>{
+    if(cmd === "open") document.getElementById("btnOpenFile").click();
+    else if(cmd === "save") document.getElementById("btnSaveFile").click();
+  });
 }
 
 /* ---------- 頁籤 ---------- */
