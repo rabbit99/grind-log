@@ -1343,19 +1343,31 @@ document.getElementById("btnExport").addEventListener("click", ()=>{
     ? "已匯出目前畫面上的資料 —— 這不是讀不出來的原始內容，那份請按上方的「下載原始內容」"
     : "已匯出 JSON", loadProblem ? "err" : "ok");
 });
+/* CSV 的一格。
+   試算表會把 = + - @（以及 Tab、換行）開頭的內容當成公式執行。人員名稱、備註，還有匯入檔裡
+   認不得、原樣保留的日期或數值，都可能被做成會開連結、讀其他格的公式 —— 這類文字前面加一個 '，
+   讓試算表當成純文字。數字（包括 -1.5 這種負數）照原樣輸出。
+   含逗號、引號、換行的用引號包起來，免得欄位錯位；quote 為 true 時一律包。 */
+function csvCell(v, quote){
+  if(typeof v === "number") return String(v);
+  let t = safeStr(v);
+  if(/^[=+\-@\t\r\n]/.test(t) && !/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t)) t = "'" + t;
+  return quote || /[",\r\n]/.test(t) ? `"${t.replace(/"/g,'""')}"` : t;
+}
 document.getElementById("btnCsv").addEventListener("click", ()=>{
   const head = ["日期","星期","起","迄","時數","計費時數","人員","等級","獲得%","該級升級經驗","獲得經驗","每小時經驗","每小時%","費用","每百萬經驗成本","備註","啟用"];
   const lines = [head.join(",")];
+  const c = v => csvCell(v), q = v => csvCell(v, true);   // q：人員名稱和備註跟以前一樣一律加引號
   sorted().forEach(s=>{
     const d = derive(s);
     lines.push([
-      s.date, weekday(s.date), s.start, s.end, d.hours, d.billHours,
-      `"${(d.worker?d.worker.name:"?").replace(/"/g,'""')}"`,
-      s.level, s.gainedPct, d.required, Math.round(d.units),
-      Math.round(d.unitsPerHour), d.pctPerHour.toFixed(4),
-      Math.round(d.cost), Math.round(d.costPerMUnit),
-      `"${String(s.note||"").replace(/"/g,'""')}"`,
-      isOn(s) ? "是" : "否"
+      c(s.date), c(weekday(s.date)), c(s.start), c(s.end), c(d.hours), c(d.billHours),
+      q(d.worker ? d.worker.name : "?"),
+      c(s.level), c(s.gainedPct), c(d.required), c(Math.round(d.units)),
+      c(Math.round(d.unitsPerHour)), c(d.pctPerHour.toFixed(4)),
+      c(Math.round(d.cost)), c(Math.round(d.costPerMUnit)),
+      q(s.note || ""),
+      c(isOn(s) ? "是" : "否")
     ].join(","));
   });
   download(`grind-log-${stamp()}.csv`, "\ufeff"+lines.join("\n"), "text/csv;charset=utf-8");
