@@ -1049,7 +1049,6 @@ function renderWorkerEdit(){
 }
 
 function renderLevels(){
-  lvMsg("");
   const tb = document.querySelector("#tblLevels tbody");
   tb.innerHTML = db.levels.slice().sort((a,b)=>a.level-b.level).map(l=>`
     <tr>
@@ -1267,6 +1266,7 @@ function lvMsg(t){
 }
 document.querySelector("#tblLevels").addEventListener("change", e=>{
   const t = e.target; if(!t.dataset.l) return;
+  lvMsg("");        // 上一則提示到下次編輯等級表才清；重畫時不清，不然同一次點擊的重畫會把它立刻蓋掉
   const lv = num(t.dataset.l);
   const l = db.levels.find(x=>num(x.level)===lv); if(!l) return;
   const k = t.dataset.k;
@@ -1277,7 +1277,7 @@ document.querySelector("#tblLevels").addEventListener("change", e=>{
     const err = !Number.isFinite(v) ? "等級要填數字"
       : db.levels.some(x=>x!==l && num(x.level)===v) ? `等級表已經有 Lv ${v}，不能重複`
       : "";
-    if(err){ t.value = l.level; lvMsg(err); return; }   // 不重畫，訊息留著；下次重畫等級表時清掉
+    if(err){ t.value = l.level; lvMsg(err); return; }
   }
   l[k] = (k==="level"||k==="required") ? (parseFloat(t.value)||0) : t.value;
   persist(); render();
@@ -1299,8 +1299,11 @@ document.querySelector("#tblLevels").addEventListener("click", e=>{
   persist(); render();
 });
 document.getElementById("btnAddLevel").addEventListener("click", ()=>{
-  const max = db.levels.reduce((m,l)=>Math.max(m,num(l.level)),0);
-  db.levels.push({level:max+1,required:0,confidence:"estimated",note:""});
+  // 只看有限數字：舊資料裡認不得的等級（"5%"）會讓 max 變成 NaN，新增出存不了的列
+  const max = db.levels.reduce((m,l)=>Number.isFinite(num(l.level)) ? Math.max(m,num(l.level)) : m, 0);
+  const next = max + 1;
+  if(db.levels.some(l=>num(l.level)===next)){ lvMsg("等級太大，無法自動加一級，請直接修改表格裡的等級"); return; }
+  db.levels.push({level:next,required:0,confidence:"estimated",note:""});
   persist(); render();
 });
 
@@ -1314,7 +1317,7 @@ function applyLoaded(d){
   catch(err){ ({db, editingId, page, dayPage} = prev); render(); throw err; }
   loadProblem = null;      // 使用者主動換了資料，恢復自動儲存
   syncLoadBanner();
-  resetEditUI();
+  resetEditUI(); lvMsg("");
   persist();
 }
 /* 讀不出原本的資料時，常駐在頁首的提示。一般操作不會動到它，
@@ -1440,14 +1443,14 @@ document.getElementById("fileInput").addEventListener("change", e=>{
    所以給一個明確的還原入口，不必開 DevTools。 */
 document.getElementById("btnDemo").addEventListener("click", ()=>{
   if(!confirm("用示範資料覆蓋目前的內容？現有的記錄、人員、等級表都會被取代。" + backupAdvice())) return;
-  db = normalize(seed()); editingId = null; page = 1; dayPage = 1; loadProblem = null; syncLoadBanner(); resetEditUI(); persist(); render();
+  db = normalize(seed()); editingId = null; page = 1; dayPage = 1; loadProblem = null; syncLoadBanner(); resetEditUI(); lvMsg(""); persist(); render();
   ioMsg(`已還原示範資料（${db.sessions.length} 筆）`,"ok");
 });
 
 document.getElementById("btnReset").addEventListener("click", ()=>{
   if(!confirm("全部歸零？記錄、人員、等級表都會清掉，變成完全空白。\n要回到範例狀態請改按「還原示範資料」。" + backupAdvice())) return;
   db = {schema:"grind-log/v1",meta:{title:"練功記錄",unit:"exp",currency:"TWD"},levels:[],workers:[],sessions:[]};
-  editingId = null; page = 1; dayPage = 1; loadProblem = null; syncLoadBanner(); resetEditUI(); persist(); render();
+  editingId = null; page = 1; dayPage = 1; loadProblem = null; syncLoadBanner(); resetEditUI(); lvMsg(""); persist(); render();
   ioMsg("已清空。要回到示範資料，按「還原示範資料」","ok");
 });
 
