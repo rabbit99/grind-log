@@ -76,13 +76,11 @@
 
   /* ---------- layout ---------- */
   .cols{display:grid;grid-template-columns:320px 1fr;gap:22px;align-items:start}
-  /* 窄螢幕改成單欄。欄位要能縮到比表格窄（min-width:0），表格在自己的 .scroll 裡左右捲，
-     不然最寬的記錄表會把整欄、連同上面的表單一起撐出螢幕。
-     寬螢幕不加：那裡表格一縮，改／刪按鈕就被捲到看不到的地方 */
-  @media(max-width:900px){
-    .cols{grid-template-columns:1fr}
-    .cols > *{min-width:0}
-  }
+  /* 欄位要能縮到比表格窄（min-width:0），表格在自己的 .scroll 裡左右捲。不然最寬的記錄表會把
+     整欄撐寬：901～1300px 的視窗整頁溢出，單欄時連上面的表單也被撐出螢幕。
+     捲動時最右邊的改／刪固定不動，一直按得到（見 tables 的 .act） */
+  .cols > *{min-width:0}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
 
   .panel{
     background:var(--stone-800);border:1px solid var(--rule);
@@ -158,6 +156,15 @@
   /* 觸控螢幕沒有「滑過」，改／刪要一直看得到 */
   @media(hover:none){.rowact{opacity:1}}
   tfoot td{font-weight:600;border-top:1px solid #3D4859;border-bottom:none}
+  /* 表格比外框寬、要左右捲時（.is-scroll，由程式偵測），最右邊的改／刪固定在右側、一直顯示，
+     左邊加一條分隔線。要有底色才蓋得住捲到下面的內容，滑過整列時的底色也要疊上去。
+     放得下時不固定，外觀跟以前一樣 */
+  .is-scroll th.act,.is-scroll td.act{position:sticky;right:0;background:var(--stone-800);box-shadow:inset 1px 0 0 var(--rule)}
+  .is-scroll tbody tr:hover td.act{background-image:linear-gradient(rgba(201,162,39,.055),rgba(201,162,39,.055))}
+  .is-scroll .rowact{opacity:1}
+  /* 記錄表：左右內距 6px，最窄從約 912px 縮到約 834px，1280px 以上的視窗放得下、不用左右捲 */
+  #tblSessions th:not(.cb),#tblSessions td:not(.cb){padding-left:6px;padding-right:6px}
+  #tblSessions td.note{white-space:normal;max-width:180px}
   .empty{padding:26px var(--pad);color:var(--bone-dim);font-size:13px}
 
   /* ---------- 啟用勾選 ---------- */
@@ -169,6 +176,9 @@
   tr.off td.cb{opacity:1}
   tr.off:hover td{opacity:.55}
   tr.off:hover td.cb{opacity:1}
+  /* 固定住的改／刪不能半透明，不然捲到下面的內容會透出來；改成按鈕本身變淡 */
+  .is-scroll tr.off td.act,.is-scroll tr.off:hover td.act{opacity:1}
+  .is-scroll tr.off td.act button{opacity:.55}
 
 /* ---------- 分頁 ---------- */
   .pager{
@@ -415,7 +425,7 @@
               <th class="cb"><label class="allcb" title="勾選或取消這一頁的全部記錄"><input type="checkbox" id="pgAll">啟用</label></th>
               <th class="tl">日期</th><th class="tl">星期</th><th class="tl">時段</th><th>時數</th><th title="實際計費／有效時數，休息時間不算">計費</th>
               <th class="tl">人員</th><th>等級</th><th>獲得%</th>
-              <th>每小時經驗</th><th>每小時%</th><th>費用</th><th class="tl">備註</th><th></th>
+              <th>每小時經驗</th><th>每小時%</th><th>費用</th><th class="tl">備註</th><th class="act"></th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -442,7 +452,7 @@
           <div class="body">
             <div class="scroll">
               <table id="tblWorkerEdit">
-                <thead><tr><th class="tl">名稱</th><th>時薪</th><th>計費</th><th class="tl">備註</th><th></th></tr></thead>
+                <thead><tr><th class="tl">名稱</th><th>時薪</th><th>計費</th><th class="tl">備註</th><th class="act"></th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -454,7 +464,7 @@
           <div class="body">
             <div class="scroll">
               <table id="tblLevels">
-                <thead><tr><th class="tl">等級</th><th>升下一等經驗</th><th class="tl">可信度</th><th class="tl">備註</th><th></th></tr></thead>
+                <thead><tr><th class="tl">等級</th><th>升下一等經驗</th><th class="tl">可信度</th><th class="tl">備註</th><th class="act"></th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -982,8 +992,8 @@ function renderSessions(){
       <td>${d.required?fmt0(d.unitsPerHour):'<span style="color:var(--crimson)">未登錄</span>'}</td>
       <td>${fmt4(d.pctPerHour)}</td>
       <td>${fmt0(d.cost)}</td>
-      <td class="tl" style="white-space:normal;max-width:180px">${esc(s.note||"")}</td>
-      <td><span class="rowact">
+      <td class="tl note">${esc(s.note||"")}</td>
+      <td class="act"><span class="rowact">
         <button class="sm ghost" data-edit="${esc(s.id)}">改</button>
         <button class="sm ghost danger" data-del="${esc(s.id)}">刪</button>
       </span></td>
@@ -1049,7 +1059,7 @@ function renderWorkerEdit(){
       <td><input data-w="${esc(w.id)}" data-k="hourlyRate" type="number" step="any" value="${esc(w.hourlyRate)}" style="width:90px"></td>
       <td><input data-w="${esc(w.id)}" data-k="billable" type="checkbox" ${w.billable?"checked":""} style="width:auto"></td>
       <td class="tl"><input data-w="${esc(w.id)}" data-k="note" value="${esc(w.note||"")}" style="width:150px"></td>
-      <td><button class="sm ghost danger" data-delw="${esc(w.id)}">刪</button></td>
+      <td class="act"><button class="sm ghost danger" data-delw="${esc(w.id)}">刪</button></td>
     </tr>`).join("");
 }
 
@@ -1066,7 +1076,7 @@ function renderLevels(){
         </select>
       </td>
       <td class="tl"><input data-l="${esc(l.level)}" data-k="note" value="${esc(l.note||"")}" style="width:140px"></td>
-      <td><button class="sm ghost danger" data-dell="${esc(l.level)}">刪</button></td>
+      <td class="act"><button class="sm ghost danger" data-dell="${esc(l.level)}">刪</button></td>
     </tr>`).join("");
 }
 
@@ -1325,6 +1335,18 @@ function applyLoaded(d){
   resetEditUI(); lvMsg("");
   persist();
 }
+/* 表格比外框寬（要左右捲）時加上 is-scroll，改／刪才固定在右側（見 CSS 的 .act）。
+   外框大小（視窗、頁籤、展開收合）和表格內容（重畫）都會改變它，兩個都要看 */
+const scrollRO = new ResizeObserver(entries=>{
+  for(const e of entries){
+    const sc = e.target.closest(".scroll");
+    sc.classList.toggle("is-scroll", sc.scrollWidth > sc.clientWidth + 1);
+  }
+});
+for(const t of document.querySelectorAll("#tblSessions,#tblWorkerEdit,#tblLevels")){
+  scrollRO.observe(t.closest(".scroll")); scrollRO.observe(t);
+}
+
 /* 讀不出原本的資料時，常駐在頁首的提示。一般操作不會動到它，
    只有使用者自己換掉資料（匯入、還原示範資料、清空全部）才會收起來。
    全部用 textContent，錯誤訊息和原文都不會被當成 HTML。 */
