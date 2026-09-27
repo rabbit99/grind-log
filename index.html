@@ -1068,20 +1068,22 @@ function renderWorkerEdit(){
     </tr>`).join("");
 }
 
+/* 每一列用它在 db.levels 裡的位置識別（data-li），不用等級數字 ——
+   舊資料裡可能有重複或空白的等級，用數字找會改到、刪到別列，空白的列也改不了 */
 function renderLevels(){
   const tb = document.querySelector("#tblLevels tbody");
-  tb.innerHTML = db.levels.slice().sort((a,b)=>a.level-b.level).map(l=>`
+  tb.innerHTML = db.levels.map((l,i)=>({l,i})).sort((a,b)=>a.l.level-b.l.level).map(({l,i})=>`
     <tr>
-      <td class="tl"><input data-l="${esc(l.level)}" data-k="level" type="number" value="${esc(l.level)}" style="width:70px"></td>
-      <td><input data-l="${esc(l.level)}" data-k="required" type="number" value="${esc(l.required)}" style="width:130px"></td>
+      <td class="tl"><input data-li="${i}" data-k="level" type="number" value="${esc(l.level)}" style="width:70px"></td>
+      <td><input data-li="${i}" data-k="required" type="number" value="${esc(l.required)}" style="width:130px"></td>
       <td class="tl">
-        <select data-l="${esc(l.level)}" data-k="confidence" style="width:90px">
+        <select data-li="${i}" data-k="confidence" style="width:90px">
           <option value="measured"${l.confidence!=="estimated"?" selected":""}>實測</option>
           <option value="estimated"${l.confidence==="estimated"?" selected":""}>推估</option>
         </select>
       </td>
-      <td class="tl"><input data-l="${esc(l.level)}" data-k="note" value="${esc(l.note||"")}" style="width:140px"></td>
-      <td class="act"><button class="sm ghost danger" data-dell="${esc(l.level)}">刪</button></td>
+      <td class="tl"><input data-li="${i}" data-k="note" value="${esc(l.note||"")}" style="width:140px"></td>
+      <td class="act"><button class="sm ghost danger" data-delli="${i}">刪</button></td>
     </tr>`).join("");
 }
 
@@ -1284,38 +1286,40 @@ function lvMsg(t){
   const el = document.getElementById("lvMsg");
   el.textContent = t || ""; el.hidden = !t;
 }
+/* 確認框、提示裡怎麼稱呼一列：等級空白或認不得時照實寫 */
+function lvLabel(l){ const s = safeStr(l.level).trim(); return s === "" ? "等級空白的那列" : `Lv ${s}`; }
 document.querySelector("#tblLevels").addEventListener("change", e=>{
-  const t = e.target; if(!t.dataset.l) return;
+  const t = e.target; if(t.dataset.li === undefined) return;
   lvMsg("");        // 上一則提示到下次編輯等級表才清；重畫時不清，不然同一次點擊的重畫會把它立刻蓋掉
-  const lv = num(t.dataset.l);
-  const l = db.levels.find(x=>num(x.level)===lv); if(!l) return;
+  const l = db.levels[+t.dataset.li]; if(!l) return;
   const k = t.dataset.k;
-  // 等級是這一列的識別，修改、刪除、記錄查經驗都靠它：不能改成空的、非數字，或跟別列重複。
-  // 以前會照存，兩列同一個等級後，改其中一列會改到另一列，刪除會兩列一起刪
+  // 記錄查經驗靠等級數字（levelInfo 取第一列符合的）：不能改成空的、非數字，或跟別列重複
   if(k === "level"){
     const v = parseFloat(t.value);
+    const dup = Number.isFinite(v) ? db.levels.find(x=>x!==l && num(x.level)===v) : null;
     const err = !Number.isFinite(v) ? "等級要填數字"
-      : db.levels.some(x=>x!==l && num(x.level)===v) ? `等級表已經有 Lv ${v}，不能重複`
-      : "";
+      : !dup ? ""
+      : typeof dup.level === "number" ? `等級表已經有 Lv ${v}，不能重複`
+      // 空白或認不得的等級，計算時也可能被當成這個數字（null、"" 當成 0，"0x33" 當成 51）
+      : `等級表有一列「${lvLabel(dup)}」計算時也算 Lv ${v}，請先修改那一列`;
     if(err){ t.value = l.level; lvMsg(err); return; }
   }
   l[k] = (k==="level"||k==="required") ? (parseFloat(t.value)||0) : t.value;
   persist(); render();
 });
 document.querySelector("#tblLevels").addEventListener("click", e=>{
-  const b = e.target.closest("[data-dell]"); if(!b) return;
-  // 等級是 null／缺值時 esc 會給空字串，num("") 是 0，會誤刪等級 0 的列；沒有等級值就不動作（跟以前一樣）
-  if(b.dataset.dell === "") return;
-  const lv = num(b.dataset.dell);
-  const rows = db.levels.filter(l=>num(l.level)===lv).length;
-  if(!rows) return;                                   // 刪不到任何列時不問（跟以前一樣不動作）
-  // 跟 derive 用同一套比對：記錄的經驗取第一列符合的等級，升級經驗是 0 時本來就算不出
+  const b = e.target.closest("[data-delli]"); if(!b) return;
+  const l = db.levels[+b.dataset.delli]; if(!l) return;
+  // 只刪這一列。跟 derive 用同一套比對：記錄的經驗取第一列符合的等級（levelInfo），
+  // 所以要看刪掉的是不是正在被用的那列、刪掉後還有沒有別列可以接手
+  const lv = num(l.level);
+  const others = db.levels.filter(x=>x!==l && num(x.level)===lv);
   const used = db.sessions.filter(s=>num(s.level)===lv).length;
-  const li = levelInfo(lv), hasExp = li && num(li.required);
-  if(!confirm(`刪除 Lv ${lv} 的等級資料？`
-    + (rows > 1 ? `\n等級表裡有 ${rows} 列都是 Lv ${lv}，會一起刪掉。` : "")
-    + (used && hasExp ? `\n有 ${used} 筆記錄用到這個等級的經驗，刪除後會算不出它們的經驗和時速。` : ""))) return;
-  db.levels = db.levels.filter(l=>num(l.level)!==lv);
+  const inUse = used && levelInfo(lv) === l && num(l.required);
+  if(!confirm(`刪除「${lvLabel(l)}」這一列？`
+    + (others.length ? `\n等級表還有 ${others.length} 列也算 Lv ${lv}，只會刪掉這一列${inUse ? "，記錄改用剩下那列的升級經驗" : ""}。` : "")
+    + (!others.length && inUse ? `\n有 ${used} 筆記錄用到這個等級的經驗，刪除後會算不出它們的經驗和時速。` : ""))) return;
+  db.levels = db.levels.filter(x=>x!==l);
   persist(); render();
 });
 document.getElementById("btnAddLevel").addEventListener("click", ()=>{
