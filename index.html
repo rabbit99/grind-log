@@ -72,8 +72,9 @@
   .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--bone-dim)}
   /* 很長又沒有空白的名稱（或找不到人員時顯示的 id）要能折行，不然手機上會把整頁撐寬 */
   .legend span{display:inline-flex;align-items:flex-start;gap:6px;min-width:0;word-break:break-word;overflow-wrap:anywhere}
-  /* 色塊對齊第一行，名稱折成多行時不會跑到中間；單行時跟置中的位置一樣（行高 12px × 1.55） */
-  .legend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none;margin-top:calc((12px * 1.55 - 9px) / 2)}
+  /* 色塊對齊第一行，名稱折成多行時不會跑到中間；用實際行高算（1lh），單行時跟置中的位置一樣。
+     4.8px 是不支援 lh 的舊瀏覽器的退路（12px × 行高 1.55） */
+  .legend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none;margin-top:4.8px;margin-top:calc((1lh - 9px) / 2)}
 
   /* ---------- layout ---------- */
   .cols{display:grid;grid-template-columns:320px 1fr;gap:22px;align-items:start}
@@ -171,8 +172,9 @@
   /* 記錄表：左右內距 6px，最窄從約 912px 縮到約 834px，1280px 以上的視窗放得下、不用左右捲 */
   #tblSessions th:not(.cb),#tblSessions td:not(.cb){padding-left:6px;padding-right:6px}
   #tblSessions td.note{white-space:normal;max-width:180px}
-  /* 表格已經要左右捲時，備註欄不必再擠：留最小寬度，長備註不會變成一行一兩個字、把列撐很高 */
-  .is-scroll #tblSessions td.note{min-width:10em}
+  /* 表格已經要左右捲時，備註欄不必再擠：留最小寬度，長備註不會變成一行一兩個字、把列撐很高。
+     這一頁沒有較長的備註（has-note，見 renderSessions）時不撐，免得表格白白變寬 */
+  .is-scroll #tblSessions.has-note td.note{min-width:10em}
   .empty{padding:26px var(--pad);color:var(--bone-dim);font-size:13px}
 
   /* ---------- 啟用勾選 ---------- */
@@ -243,7 +245,7 @@
   .dlegend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:12px var(--pad) 6px;font-size:12px;color:var(--bone-dim)}
   /* 跟經驗條圖例一樣：很長的名稱或 id 要能折行 */
   .dlegend span{display:inline-flex;align-items:flex-start;gap:6px;min-width:0;word-break:break-word;overflow-wrap:anywhere}
-  .dlegend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none;margin-top:calc((12px * 1.55 - 9px) / 2)}
+  .dlegend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none;margin-top:4.8px;margin-top:calc((1lh - 9px) / 2)}
   .dlegend .dim{margin-left:auto}
   #tblDaily td{vertical-align:middle}
   #tblDaily th.tlcell,#tblDaily td.tlcell{width:50%;min-width:260px;text-align:left}
@@ -1008,6 +1010,8 @@ function renderSessions(){
     </tr>`;
   }).join("");
 
+  // 這一頁有放不進窄欄的備註（超過 5 個字）時，要左右捲的表格才把備註欄撐寬（見 CSS）
+  document.getElementById("tblSessions").classList.toggle("has-note", slice.some(s=>safeStr(s.note).trim().length > 5));
   syncAllCb(slice);
   renderPager(all.length, pages, from, slice.length);
 }
@@ -1360,10 +1364,15 @@ function applyLoaded(d){
 /* 表格比外框寬（要左右捲）時加上 is-scroll，改／刪才固定在右側（見 CSS 的 .act）。
    外框大小（視窗、頁籤、展開收合）和表格內容（重畫）都會改變它，兩個都要看 */
 const scrollRO = new ResizeObserver(entries=>{
-  for(const e of entries){
-    const sc = e.target.closest(".scroll");
-    sc.classList.toggle("is-scroll", sc.scrollWidth > sc.clientWidth);
-  }
+  const scs = new Set(entries.map(e=>e.target.closest(".scroll")));
+  // 排到下一格畫面再改：在回呼裡直接改會讓被觀察的元素又變大小，瀏覽器會報 ResizeObserver loop
+  requestAnimationFrame(()=>{
+    for(const sc of scs){
+      // 先拿掉再量：is-scroll 時備註欄有最小寬度，帶著它量會一直判斷成要捲，縮小再放大後退不回來
+      sc.classList.remove("is-scroll");
+      sc.classList.toggle("is-scroll", sc.scrollWidth > sc.clientWidth);
+    }
+  });
 });
 for(const t of document.querySelectorAll("#tblSessions,#tblWorkerEdit,#tblLevels")){
   scrollRO.observe(t.closest(".scroll")); scrollRO.observe(t);
