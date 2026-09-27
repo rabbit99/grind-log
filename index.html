@@ -69,8 +69,9 @@
   .stat .u{font-size:12px;font-weight:400;color:var(--bone-dim)}
   .stat .v.gold{color:var(--gold)}
   .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--bone-dim)}
-  .legend span{display:inline-flex;align-items:center;gap:6px}
-  .legend i{width:9px;height:9px;border-radius:1px;display:inline-block}
+  /* 很長又沒有空白的名稱（或找不到人員時顯示的 id）要能折行，不然手機上會把整頁撐寬 */
+  .legend span{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere}
+  .legend i{width:9px;height:9px;border-radius:1px;display:inline-block;flex:none}
 
   /* ---------- layout ---------- */
   .cols{display:grid;grid-template-columns:320px 1fr;gap:22px;align-items:start}
@@ -811,7 +812,8 @@ const fmt1 = n => fin(n).toLocaleString("en-US",{minimumFractionDigits:1,maximum
 // 百分比一律 4 位小數；時數仍用 fmt1（6.5H 不需要 6.5000H）
 const fmt2 = n => fin(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt4 = n => fin(n).toLocaleString("en-US",{minimumFractionDigits:4,maximumFractionDigits:4});
-function weekday(d){ const t=new Date(d+"T00:00:00"); return isNaN(t)?"":WEEK[t.getDay()]; }
+/* 不存在的日期（2026-02-30）不顯示星期 —— Date 會自動進位成 3/2，算出來的星期是錯的 */
+function weekday(d){ const iso = normDate(d); return iso ? WEEK[new Date(iso+"T00:00:00").getDay()] : ""; }
 function esc(s){ return safeStr(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function hhmm(v){
   const n = numOrNaN(v); if(!isFinite(n)) return "";
