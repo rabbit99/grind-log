@@ -456,6 +456,7 @@
               </table>
             </div>
             <div class="btnrow"><button class="sm" id="btnAddLevel">新增等級</button></div>
+            <div class="msg err" id="lvMsg" role="alert" hidden></div>
           </div>
         </details>
       </section>
@@ -1048,6 +1049,7 @@ function renderWorkerEdit(){
 }
 
 function renderLevels(){
+  lvMsg("");
   const tb = document.querySelector("#tblLevels tbody");
   tb.innerHTML = db.levels.slice().sort((a,b)=>a.level-b.level).map(l=>`
     <tr>
@@ -1258,11 +1260,25 @@ document.getElementById("btnAddWorker").addEventListener("click", ()=>{
   persist(); render();
 });
 
+/* 等級表下方的提示；沒有訊息時整行隱藏，不佔版面 */
+function lvMsg(t){
+  const el = document.getElementById("lvMsg");
+  el.textContent = t || ""; el.hidden = !t;
+}
 document.querySelector("#tblLevels").addEventListener("change", e=>{
   const t = e.target; if(!t.dataset.l) return;
   const lv = num(t.dataset.l);
   const l = db.levels.find(x=>num(x.level)===lv); if(!l) return;
   const k = t.dataset.k;
+  // 等級是這一列的識別，修改、刪除、記錄查經驗都靠它：不能改成空的、非數字，或跟別列重複。
+  // 以前會照存，兩列同一個等級後，改其中一列會改到另一列，刪除會兩列一起刪
+  if(k === "level"){
+    const v = parseFloat(t.value);
+    const err = !Number.isFinite(v) ? "等級要填數字"
+      : db.levels.some(x=>x!==l && num(x.level)===v) ? `等級表已經有 Lv ${v}，不能重複`
+      : "";
+    if(err){ t.value = l.level; lvMsg(err); return; }   // 不重畫，訊息留著；下次重畫等級表時清掉
+  }
   l[k] = (k==="level"||k==="required") ? (parseFloat(t.value)||0) : t.value;
   persist(); render();
 });
