@@ -623,7 +623,7 @@ function numField(v, c){
 function normalize(d, issues){
   const importing = Array.isArray(issues);
   if(!isPlainObj(d)) d = {};
-  const c = {dropped:0, newid:0, reid:0, rewid:0, padded:0, baddate:0, bad:0, badtype:0, badbh:0, badtext:0, badlv:0, duplv:0};
+  const c = {dropped:0, newid:0, newwid:0, reid:0, rewid:0, padded:0, baddate:0, bad:0, badtype:0, badbh:0, badtext:0, badlv:0, duplv:0};
   const textField = v => (v !== null && typeof v === "object") ? (c.badtext++, "") : safeStr(v);
   d.schema = d.schema || "grind-log/v1";
   const meta = isPlainObj(d.meta) ? d.meta : {};
@@ -652,11 +652,20 @@ function normalize(d, issues){
   // 對照表用「型別＋原始值」當鍵，跟以前用 === 比對的結果一致
   const wkey = v => typeof v + ":" + safeStr(v);
   const widMap = new Map(), seenW = new Set();
+  // 沒有 id 的人員（整理後是 ""）自動編號：id 是空字串時，介面上的修改、記錄的人員選單都認不得他。
+  // 編號固定是 w-noid-1、w-noid-2…，每次載入都一樣；原本對到 "" 的記錄會跟著換（見 sessions）
+  const rawWid = new Set((Array.isArray(d.workers) ? d.workers : []).map(w => isPlainObj(w) ? cleanId(w.id) : ""));
+  let noidK = 1, blankWid = null;
   d.workers = (Array.isArray(d.workers) ? d.workers : []).filter(w => {
     if(!isPlainObj(w)){ c.dropped++; return false; }
     const raw = w.id;
     let id = cleanId(raw);
-    if(seenW.has(id)){ let k = 2; while(seenW.has(id + "_" + k)) k++; id = id + "_" + k; c.rewid++; }
+    if(id === ""){
+      do{ id = "w-noid-" + noidK++; }while(rawWid.has(id) || seenW.has(id));
+      if(blankWid === null) blankWid = id;      // 以前 id 是 "" 的就是這位
+      c.newwid++;
+    }
+    else if(seenW.has(id)){ let k = 2; while(seenW.has(id + "_" + k)) k++; id = id + "_" + k; c.rewid++; }
     seenW.add(id);
     if(!widMap.has(wkey(raw))) widMap.set(wkey(raw), id);    // 原始 id 完全相同時，記錄對到第一位（跟以前 find 一樣）
     w.id = id;
@@ -684,6 +693,8 @@ function normalize(d, issues){
     for(const k of ["start","end","gainedPct","level"]) if(k in s) s[k] = numField(s[k], c);
     // 沒有 workerId 的記錄也要經過對照表：沒有 id 的人員會被整理成 ""，兩邊才對得上
     s.workerId = widMap.has(wkey(s.workerId)) ? widMap.get(wkey(s.workerId)) : cleanId(s.workerId);
+    // 整理後是 "" 的記錄以前會對到 id 是 "" 的那位人員；那位已經自動編號，跟著換成新 id
+    if(s.workerId === "" && blankWid !== null) s.workerId = blankWid;
     if("note" in s) s.note = textField(s.note);
     // 沒有 enabled 欄位的一律視為啟用（舊檔匯入、種子資料都走這裡）
     s.enabled = s.enabled !== false;
@@ -701,6 +712,7 @@ function normalize(d, issues){
     if(c.dropped) add(`略過 ${c.dropped} 個不是記錄的項目`);
     if(c.newid)   add(`${c.newid} 筆記錄沒有 id，已自動編號`, false);
     if(c.reid)    add(`${c.reid} 筆記錄的 id 重複，已重新編號`);
+    if(c.newwid)  add(`${c.newwid} 位人員沒有 id，已自動編號`, false);
     if(c.rewid)   add(`${c.rewid} 位人員的 id 整理後重複，已改成不同的 id`);
     if(c.padded)  add(`${c.padded} 筆日期已補成標準格式`, false);
     if(c.baddate) add(`${c.baddate} 筆日期無法辨識（保留原樣，每日進度頁列在「日期不明」）`);
