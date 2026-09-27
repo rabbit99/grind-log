@@ -655,6 +655,8 @@ function normalize(d, issues){
   // 沒有 id 的人員（整理後是 ""）自動編號：id 是空字串時，介面上的修改、記錄的人員選單都認不得他。
   // 編號固定是 w-noid-1、w-noid-2…，每次載入都一樣；原本對到 "" 的記錄會跟著換（見 sessions）
   const rawWid = new Set((Array.isArray(d.workers) ? d.workers : []).map(w => isPlainObj(w) ? cleanId(w.id) : ""));
+  // 記錄在用的 id 也要避開：人員刪掉後記錄還留著他的 id，新編號撞上的話，那些記錄會悄悄變成新人員的
+  for(const s of (Array.isArray(d.sessions) ? d.sessions : [])) if(isPlainObj(s)) rawWid.add(cleanId(s.workerId));
   let noidK = 1, blankWid = null;
   d.workers = (Array.isArray(d.workers) ? d.workers : []).filter(w => {
     if(!isPlainObj(w)){ c.dropped++; return false; }
@@ -712,7 +714,8 @@ function normalize(d, issues){
     if(c.dropped) add(`略過 ${c.dropped} 個不是記錄的項目`);
     if(c.newid)   add(`${c.newid} 筆記錄沒有 id，已自動編號`, false);
     if(c.reid)    add(`${c.reid} 筆記錄的 id 重複，已重新編號`);
-    if(c.newwid)  add(`${c.newwid} 位人員沒有 id，已自動編號`, false);
+    // 只有一位時沒有歧義；有多位時，沒填人員的記錄要對到哪一位是推定的，用紅字請使用者確認
+    if(c.newwid)  add(`${c.newwid} 位人員沒有 id，已自動編號` + (c.newwid > 1 ? "（有多位，請確認記錄有沒有對到對的人）" : ""), c.newwid > 1);
     if(c.rewid)   add(`${c.rewid} 位人員的 id 整理後重複，已改成不同的 id`);
     if(c.padded)  add(`${c.padded} 筆日期已補成標準格式`, false);
     if(c.baddate) add(`${c.baddate} 筆日期無法辨識（保留原樣，每日進度頁列在「日期不明」）`);
