@@ -649,7 +649,7 @@ function normalize(d, issues){
   for(const k of ["title","unit","currency"]) if(k in meta) meta[k] = textField(meta[k]);
   d.meta = Object.assign({title:"練功記錄",unit:"exp",currency:"TWD"}, meta);
 
-  // 等級表：刪除和查詢都用等級數字找列。匯入時略過沒有有效等級的列和重複的等級；
+  // 等級表：記錄查經驗用等級數字找列（取第一列符合的）。匯入時略過沒有有效等級的列和重複的等級；
   // 載入時一列都不刪 —— 那可能是使用者在介面上改出來、正要修回去的列
   const seenLv = new Set();
   d.levels = (Array.isArray(d.levels) ? d.levels : []).filter(l => {
@@ -1072,9 +1072,13 @@ function renderWorkerEdit(){
    舊資料裡可能有重複或空白的等級，用數字找會改到、刪到別列，空白的列也改不了 */
 function renderLevels(){
   const tb = document.querySelector("#tblLevels tbody");
-  tb.innerHTML = db.levels.map((l,i)=>({l,i})).sort((a,b)=>a.l.level-b.l.level).map(({l,i})=>`
+  // 依等級排序；認不得的等級排最後，同一級照原本的先後（上面那列就是記錄在用的那列）
+  const key = l => Number.isFinite(num(l.level)) ? num(l.level) : Infinity;
+  tb.innerHTML = db.levels.map((l,i)=>({l,i})).sort((a,b)=>(key(a.l)-key(b.l)) || (a.i-b.i)).map(({l,i})=>`
     <tr>
-      <td class="tl"><input data-li="${i}" data-k="level" type="number" value="${esc(l.level)}" style="width:70px"></td>
+      <td class="tl"><input data-li="${i}" data-k="level" type="number" value="${esc(l.level)}"${
+        // number 輸入框顯示不了 "0x3C" 這種字串，會變成空白；用 placeholder 把原文顯示出來，提示裡指名的列才找得到
+        typeof l.level === "string" && l.level.trim() !== "" ? ` placeholder="${esc(l.level)}"` : ""} style="width:70px"></td>
       <td><input data-li="${i}" data-k="required" type="number" value="${esc(l.required)}" style="width:130px"></td>
       <td class="tl">
         <select data-li="${i}" data-k="confidence" style="width:90px">
@@ -1311,15 +1315,21 @@ document.querySelector("#tblLevels").addEventListener("click", e=>{
   const b = e.target.closest("[data-delli]"); if(!b) return;
   const l = db.levels[+b.dataset.delli]; if(!l) return;
   // 只刪這一列。跟 derive 用同一套比對：記錄的經驗取第一列符合的等級（levelInfo），
-  // 所以要看刪掉的是不是正在被用的那列、刪掉後還有沒有別列可以接手
+  // 刪掉這列後接手的是 others[0]。要看記錄現在、之後各自算不算得出經驗
   const lv = num(l.level);
   const others = db.levels.filter(x=>x!==l && num(x.level)===lv);
   const used = db.sessions.filter(s=>num(s.level)===lv).length;
-  const inUse = used && levelInfo(lv) === l && num(l.required);
+  const first = used > 0 && levelInfo(lv) === l;                  // 記錄現在用這列算
+  const nowExp = first && !!num(l.required);
+  const nextExp = first && others.length > 0 && !!num(others[0].required);
   if(!confirm(`刪除「${lvLabel(l)}」這一列？`
-    + (others.length ? `\n等級表還有 ${others.length} 列也算 Lv ${lv}，只會刪掉這一列${inUse ? "，記錄改用剩下那列的升級經驗" : ""}。` : "")
-    + (!others.length && inUse ? `\n有 ${used} 筆記錄用到這個等級的經驗，刪除後會算不出它們的經驗和時速。` : ""))) return;
+    + (others.length ? `\n等級表還有 ${others.length} 列也算 Lv ${lv}，只會刪掉這一列。` : "")
+    + (nowExp && nextExp ? "\n記錄會改用剩下那列的升級經驗。"
+      : nowExp ? `\n有 ${used} 筆記錄用到這個等級的經驗，刪除後會算不出它們的經驗和時速。`
+      : nextExp ? "\n這列沒有升級經驗，刪除後記錄會改用剩下那列的升級經驗。"
+      : ""))) return;
   db.levels = db.levels.filter(x=>x!==l);
+  lvMsg("");        // 之前的提示可能指名這一列，刪掉後就不適用了
   persist(); render();
 });
 document.getElementById("btnAddLevel").addEventListener("click", ()=>{
