@@ -68,14 +68,15 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// 對話框本身出錯也包進 try：丟到畫面端會變成「Error invoking remote method…」這種看不懂的訊息
 ipcMain.handle("file:save", async (_e, text) => {
-  const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    title: "儲存記錄",
-    defaultPath: `grind-log-${new Date().toISOString().slice(0, 10)}.json`,
-    filters: [{ name: "Grind Log JSON", extensions: ["json"] }],
-  });
-  if (canceled || !filePath) return { ok: false, canceled: true };
   try {
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: "儲存記錄",
+      defaultPath: `grind-log-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: "Grind Log JSON", extensions: ["json"] }],
+    });
+    if (canceled || !filePath) return { ok: false, canceled: true };
     await fs.writeFile(filePath, text, "utf8");
     return { ok: true, path: filePath };
   } catch (err) {
@@ -84,13 +85,13 @@ ipcMain.handle("file:save", async (_e, text) => {
 });
 
 ipcMain.handle("file:open", async () => {
-  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    title: "開啟記錄",
-    properties: ["openFile"],
-    filters: [{ name: "Grind Log JSON", extensions: ["json"] }],
-  });
-  if (canceled || !filePaths.length) return { ok: false, canceled: true };
   try {
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      title: "開啟記錄",
+      properties: ["openFile"],
+      filters: [{ name: "Grind Log JSON", extensions: ["json"] }],
+    });
+    if (canceled || !filePaths.length) return { ok: false, canceled: true };
     const text = await fs.readFile(filePaths[0], "utf8");
     return { ok: true, text, path: filePaths[0] };
   } catch (err) {

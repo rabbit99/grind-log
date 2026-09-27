@@ -136,7 +136,7 @@
   button.danger:hover{border-color:var(--crimson);color:#E39A96}
   button.sm{padding:3px 8px;font-size:12px}
   .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-  .msg{font-size:12.5px;margin-top:9px;min-height:1.2em;overflow-wrap:anywhere}
+  .msg{font-size:12.5px;margin-top:9px;min-height:1.2em;word-break:break-word;overflow-wrap:anywhere}
   .msg.err{color:#E39A96}
   .msg.ok{color:var(--jade)}
 
@@ -755,7 +755,7 @@ function normalize(d, issues){
 /* 回傳有沒有真的寫進 localStorage */
 function persist(){
   // 原本的資料讀不出來時暫停自動儲存，免得使用者一操作就把它蓋掉
-  if(loadProblem){ setSaveState("原本的資料讀不出來，自動儲存已暫停"); return false; }
+  if(loadProblem){ setSaveState(loadProblem.writeFailed ? "寫不進這台電腦，自動儲存暫停中" : "原本的資料讀不出來，自動儲存已暫停"); return false; }
   db.meta.updatedAt = new Date().toISOString();
   try{
     localStorage.setItem(STORE_KEY, JSON.stringify(db));
@@ -1356,13 +1356,14 @@ document.getElementById("btnAddLevel").addEventListener("click", ()=>{
 /* 換成新資料時先在畫面上試畫一次，成功才寫進 localStorage。
    以前是先存再畫，畫面一出錯就顯示「讀不了這個檔案」，資料卻已經被換掉了。 */
 /* 使用者主動換了整份資料（匯入、開檔、還原示範資料、清空全部）後恢復自動儲存，回傳有沒有寫進去。
-   寫入失敗時（例如儲存空間不足），讀不出來的原文還留在 localStorage 沒被蓋掉：提示要放回去、
-   繼續暫停自動儲存，不然「下載原始內容」按不到，之後哪次存檔成功就把原文蓋掉了 */
+   寫入失敗時（例如儲存空間不足），讀不出來的原文還留在 localStorage 沒被蓋掉。原文沒有另外備份時
+   （saved=false），提示要放回去、繼續暫停自動儲存，不然「下載原始內容」按不到，之後哪次存檔成功
+   就把唯一的一份原文蓋掉了。已經備份過時原文是安全的，就照使用者的選擇恢復自動儲存 */
 function resumeSaving(){
   const prev = loadProblem;
   loadProblem = null;
   const ok = persist();
-  if(!ok && prev) loadProblem = prev;
+  if(!ok && prev && !prev.saved){ prev.writeFailed = true; loadProblem = prev; }
   syncLoadBanner();
   return ok;
 }
@@ -1375,8 +1376,10 @@ function applyLoaded(d){
   resetEditUI(); lvMsg("");
   return resumeSaving();
 }
-/* 換了資料卻寫不進去時，接在成功訊息後面的說明 */
-const NOT_SAVED = "；但寫不進這台電腦（可能是儲存空間不足），請先用「匯出 JSON」另存一份";
+/* 換了資料卻寫不進去時，接在成功訊息後面的說明。匯入、開檔的資料要另存；還原示範、清空不必 */
+const NOT_SAVED_WHY = "；但寫不進這台電腦（可能是儲存空間不足，或瀏覽器不允許這個網站存資料）";
+const NOT_SAVED = NOT_SAVED_WHY + "，請先用「匯出 JSON」另存一份";
+const NOT_SAVED_LATER = NOT_SAVED_WHY + "，之後的修改不會自動儲存";
 /* 表格比外框寬（要左右捲）時加上 is-scroll，改／刪才固定在右側（見 CSS 的 .act）。
    外框大小（視窗、頁籤、展開收合）和表格內容（重畫）都會改變它，兩個都要看 */
 const scrollRO = new ResizeObserver(entries=>{
@@ -1410,7 +1413,10 @@ function syncLoadBanner(){
       : "原本存在這台電腦的資料讀不出來，而且儲存空間不足、無法另外備份。原文還留著，但匯入 JSON、還原示範資料或清空全部會把它蓋掉 —— 請先下載原始內容。",
     "自動儲存暫停中：現在做的修改不會存下來。",
     "要救回資料：按「下載原始內容」存成檔案，用文字編輯器修好錯誤的地方，再用「匯入 JSON」載入。「匯出 JSON」匯出的是目前畫面上的資料，不是這份原文。",
-    "匯入 JSON、還原示範資料或清空全部之後，恢復自動儲存。"
+    // 換了資料卻寫不進去（見 resumeSaving）時照實說，不然「之後恢復自動儲存」跟剛發生的事對不上
+    loadProblem.writeFailed
+      ? "剛才換上的資料寫不進這台電腦（可能是儲存空間不足，或瀏覽器不允許這個網站存資料），所以還沒恢復自動儲存：畫面上的資料請用「匯出 JSON」另存一份。"
+      : "匯入 JSON、還原示範資料或清空全部之後，恢復自動儲存。"
   ];
   const text = document.getElementById("loadBannerText");
   text.textContent = "";
@@ -1523,7 +1529,7 @@ document.getElementById("btnDemo").addEventListener("click", ()=>{
   if(!confirm("用示範資料覆蓋目前的內容？現有的記錄、人員、等級表都會被取代。" + backupAdvice())) return;
   db = normalize(seed()); editingId = null; page = 1; dayPage = 1; resetEditUI(); lvMsg("");
   const saved = resumeSaving(); render();
-  ioMsg(`已還原示範資料（${db.sessions.length} 筆）` + (saved ? "" : NOT_SAVED), saved ? "ok" : "err");
+  ioMsg(`已還原示範資料（${db.sessions.length} 筆）` + (saved ? "" : NOT_SAVED_LATER), saved ? "ok" : "err");
 });
 
 document.getElementById("btnReset").addEventListener("click", ()=>{
@@ -1531,7 +1537,7 @@ document.getElementById("btnReset").addEventListener("click", ()=>{
   db = {schema:"grind-log/v1",meta:{title:"練功記錄",unit:"exp",currency:"TWD"},levels:[],workers:[],sessions:[]};
   editingId = null; page = 1; dayPage = 1; resetEditUI(); lvMsg("");
   const saved = resumeSaving(); render();
-  ioMsg(saved ? "已清空。要回到示範資料，按「還原示範資料」" : "已清空" + NOT_SAVED, saved ? "ok" : "err");
+  ioMsg(saved ? "已清空。要回到示範資料，按「還原示範資料」" : "已清空" + NOT_SAVED_LATER, saved ? "ok" : "err");
 });
 
 /* ---------- Electron 專用的開檔／存檔 ----------
