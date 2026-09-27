@@ -173,7 +173,7 @@
   #tblSessions th:not(.cb),#tblSessions td:not(.cb){padding-left:6px;padding-right:6px}
   #tblSessions td.note{white-space:normal;max-width:180px}
   /* 表格已經要左右捲時，備註欄不必再擠：留最小寬度，長備註不會變成一行一兩個字、把列撐很高。
-     這一頁沒有較長的備註（has-note，見 renderSessions）時不撐，免得表格白白變寬 */
+     這一頁沒有兩個字以上的備註（has-note，見 renderSessions）時不撐，免得表格白白變寬 */
   .is-scroll #tblSessions.has-note td.note{min-width:10em}
   .empty{padding:26px var(--pad);color:var(--bone-dim);font-size:13px}
 
@@ -1010,8 +1010,9 @@ function renderSessions(){
     </tr>`;
   }).join("");
 
-  // 這一頁有放不進窄欄的備註（超過 5 個字）時，要左右捲的表格才把備註欄撐寬（見 CSS）
-  document.getElementById("tblSessions").classList.toggle("has-note", slice.some(s=>safeStr(s.note).trim().length > 5));
+  // 這一頁有放不進窄欄的備註時，要左右捲的表格才把備註欄撐寬（見 CSS）。
+  // 窄到只剩表頭寬時一行只放得下一個字，所以兩個字以上就算
+  document.getElementById("tblSessions").classList.toggle("has-note", slice.some(s=>safeStr(s.note).trim().length > 1));
   syncAllCb(slice);
   renderPager(all.length, pages, from, slice.length);
 }
@@ -1368,9 +1369,12 @@ const scrollRO = new ResizeObserver(entries=>{
   // 排到下一格畫面再改：在回呼裡直接改會讓被觀察的元素又變大小，瀏覽器會報 ResizeObserver loop
   requestAnimationFrame(()=>{
     for(const sc of scs){
-      // 先拿掉再量：is-scroll 時備註欄有最小寬度，帶著它量會一直判斷成要捲，縮小再放大後退不回來
+      // 先拿掉再量：is-scroll 時備註欄有最小寬度，帶著它量會一直判斷成要捲，縮小再放大後退不回來。
+      // 拿掉的那一下表格會變窄，捲動位置會被夾小；量完放回去，捲在右邊的不會往左跳
+      const x = sc.scrollLeft;
       sc.classList.remove("is-scroll");
       sc.classList.toggle("is-scroll", sc.scrollWidth > sc.clientWidth);
+      sc.scrollLeft = x;
     }
   });
 });
