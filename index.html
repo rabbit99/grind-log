@@ -145,7 +145,10 @@
   th:first-child,td:first-child{text-align:left}
   td.tl,th.tl{text-align:left}
   tbody tr:hover{background:rgba(201,162,39,.055)}
-  .scroll{overflow-x:auto}
+  .scroll{overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+  .scroll::-webkit-scrollbar{height:8px}
+  .scroll::-webkit-scrollbar-thumb{background:var(--rule);border-radius:4px}
+  .scroll::-webkit-scrollbar-thumb:hover{background:var(--gold-soft)}
   .who{display:inline-flex;align-items:center;gap:6px}
   .who i{width:8px;height:8px;border-radius:1px;flex:none}
   .est{color:var(--crimson);font-size:11px;margin-left:4px}
@@ -162,6 +165,8 @@
   .is-scroll th.act,.is-scroll td.act{position:sticky;right:0;background:var(--stone-800);box-shadow:inset 1px 0 0 var(--rule)}
   .is-scroll tbody tr:hover td.act{background-image:linear-gradient(rgba(201,162,39,.055),rgba(201,162,39,.055))}
   .is-scroll .rowact{opacity:1}
+  /* 用 Tab 移動焦點時，瀏覽器不知道右邊蓋著固定欄；留出空間，輸入框才不會停在它底下 */
+  .is-scroll{scroll-padding-right:56px}
   /* 記錄表：左右內距 6px，最窄從約 912px 縮到約 834px，1280px 以上的視窗放得下、不用左右捲 */
   #tblSessions th:not(.cb),#tblSessions td:not(.cb){padding-left:6px;padding-right:6px}
   #tblSessions td.note{white-space:normal;max-width:180px}
@@ -1340,7 +1345,7 @@ function applyLoaded(d){
 const scrollRO = new ResizeObserver(entries=>{
   for(const e of entries){
     const sc = e.target.closest(".scroll");
-    sc.classList.toggle("is-scroll", sc.scrollWidth > sc.clientWidth + 1);
+    sc.classList.toggle("is-scroll", sc.scrollWidth > sc.clientWidth);
   }
 });
 for(const t of document.querySelectorAll("#tblSessions,#tblWorkerEdit,#tblLevels")){
