@@ -70,6 +70,7 @@ Claude Code 在本機有 `review-merge` skill，會自動跑完第 3～5 步。�
 1. `git show main:index.html > _main_compare.html` 產生 main 的副本。
    - 放在 repo 根目錄，預覽伺服器才讀得到。已經列在 `.gitignore`，但用完還是要刪掉，**絕不 commit**。
    - 只讀的審查者不要在 repo 裡產生檔案，改放在自己的 scratchpad 資料夾，用自己開的伺服器讀取。
+   - 要跟這個分支修正前的版本比較時，同樣用 `git show HEAD:index.html > _prev_compare.html`（也已列在 `.gitignore`）。
 2. 在頁面裡建立 iframe，同時載入 `_main_compare.html` 和 `index.html`，比較：
    - 資料：`db` 去掉 `updatedAt` 後比較。
    - 版面：每個元素的 `getBoundingClientRect()`。
