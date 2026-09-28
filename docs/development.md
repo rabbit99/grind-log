@@ -111,7 +111,7 @@ Claude Code 在本機有 `review-merge` skill，會自動跑完第 3～5 步。�
   5. `db`、`cloud`、`cloudBusy` 是用 `let` 宣告的頂層變數，不在 `window` 上，要用 `iframe.contentWindow.eval("db")` 取得。
 - **用真的 Google 帳號測試**：
   - 只能由使用者自己在預覽視窗裡登入。**不要代替使用者輸入帳號密碼**。
-  - 預覽的 `http://localhost:5599` 要在 Google Cloud 用戶端的「已授權的 JavaScript 來源」裡。
+  - 用戶端的「已授權的 JavaScript 來源」要有 `https://rabbit99.github.io`（線上版）和 `http://localhost:5599`（預覽）。其他網址（例如 `127.0.0.1`）開啟時，Google 會拒絕登入。
 - **用戶端 ID** 寫在 `index.html` 的 `GOOGLE_CLIENT_ID`，是公開資訊；絕不要放用戶端密鑰。
 
 ### 模擬寫入失敗

@@ -1638,7 +1638,9 @@ if(window.grindLogNative){
    存檔放在使用者自己的 Google 雲端硬碟裡的一份試算表，規格見 docs/features/cloud-sync.md。
    只要求 drive.file：只能存取這個 App 自己建立的檔案，看不到使用者的其他檔案。
    純前端：用 Google Identity Services 取得存取權杖（只放記憶體），直接呼叫 Drive、Sheets API。 */
-const GOOGLE_CLIENT_ID = window.GRIND_LOG_GOOGLE_CLIENT_ID || "";   // 測試時可以從外面指定
+/* OAuth 用戶端 ID 是公開資訊（會出現在登入網址裡），可以放在程式裡；用戶端密鑰絕不能放。
+   測試時由 tools/cloud-mock.js 從外面指定成假的 ID */
+const GOOGLE_CLIENT_ID = window.GRIND_LOG_GOOGLE_CLIENT_ID || "101420483788-agp8psc00l9ds2u1espeghf2s799g5vr.apps.googleusercontent.com";
 const CLOUD_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const SYNC_KEY = STORE_KEY + ":sync";
 const LOCAL_BACKUP_KEY = STORE_KEY + ":local-backup";

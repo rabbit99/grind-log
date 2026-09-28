@@ -20,7 +20,7 @@
 
 以下情況整個區塊不顯示：
 
-- 沒有設定 Google 用戶端 ID（`GOOGLE_CLIENT_ID` 是空的）。
+- 沒有設定 Google 用戶端 ID（`GOOGLE_CLIENT_ID` 是空的）。目前已設定，這一條只在拿掉 ID 時才會發生。
 - Electron 版，或用 `file://` 開啟：Google 登入元件只能在 http(s) 網址下使用。
 
 ## 權限與隱私
