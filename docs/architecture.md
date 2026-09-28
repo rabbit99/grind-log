@@ -53,7 +53,7 @@ header.top（#docTitle、#saveState）
     .main：人員效率（#tblWorkers）、記錄（#tblSessions、#sessPager）、
            details：人員與時薪（#tblWorkerEdit）、等級經驗對照表（#tblLevels、#lvMsg）
 #pageDaily
-  #dailyBody（整塊由 renderDaily 產生）、#dayPager
+  標題的 #dayCount、#dailyBody（整塊由 renderDaily 產生）、#dayPager、#dayEmpty
 ```
 
 ### JS（依出現順序）
@@ -62,17 +62,17 @@ header.top（#docTitle、#saveState）
 |---|---|
 | 常數 | `WCOLORS`、`STORE_KEY`、`WEEK` |
 | 示範資料 | `seed()` |
-| 狀態 | `loadProblem`、`db = load()`、`editingId`、UI 狀態（`page`、`pageSize`、`focusId`、`tab`、`dayPage`、`dayPageSize`）、`persistUI()` |
+| 狀態 | `loadProblem`、`db = load()`、`editingId`、`UI_KEY`、UI 狀態（`page`、`pageSize`、`focusId`、`tab`、`dayPage`、`dayPageSize`）、`persistUI()` |
 | 載入 | `load()` |
 | 資料整理 | `safeStr`、`cleanId`、`isPlainObj`、`numField`、`normalize` |
-| 儲存 | `persist()`、`setSaveState()` |
-| 計算 | `num`、`pctOf`、`numOrNaN`、`lvOf`、`hoursOf`、`billHoursOf`、`levelInfo`、`workerOf`、`colorOf`、`derive`、`byStart`、`sorted`、`isOn`、`activeSorted` |
+| 儲存 | `persist()`、`saveTimer`、`setSaveState()` |
+| 計算 | `num`、`pctOf`、`numOrNaN`、`lvOf`、`hoursOf`、`billHoursOf`、`levelInfo`、`workerOf`、`colorOf`、`derive`、`startKey`、`byStart`、`sorted`、`isOn`、`activeSorted` |
 | 格式化 | `fin`、`fmt0`／`fmt1`／`fmt2`／`fmt4`、`weekday`、`esc`、`hhmm` |
 | 畫面 | `render`、`renderHero`、`renderWorkers`、`renderSessions`、`syncAllCb`、`pageList`、`renderPager`、`renderWorkerEdit`、`renderLevels`、`syncBhField`、`fillWorkerSelect` |
 | 表單 | `formMsg`、`readForm`、`validate`，以及儲存、取消的事件 |
 | 記錄表事件 | 啟用勾選、改／刪、整頁開關、分頁 |
 | 人員／等級編輯 | 行內編輯與刪除事件、`lvMsg`、`lvLabel`、新增人員、新增等級 |
-| 檔案 | `resumeSaving`、`applyLoaded`、`NOT_SAVED*`、`scrollRO`、`syncLoadBanner`、`resetEditUI`、`ioMsg`、`download`、`stamp`、`csvCell`、`backupAdvice`、`confirmReplaceUnreadable`，以及匯出、匯入、還原示範、清空的事件 |
+| 檔案 | `resumeSaving`、`applyLoaded`、`NOT_SAVED*`、`scrollRO`、`syncLoadBanner`、「下載原始內容」`#btnDownloadRaw` 的事件、`resetEditUI`、`ioMsg`、`download`、`stamp`、`csvCell`、`backupAdvice`、`confirmReplaceUnreadable`，以及匯出、匯入、還原示範、清空的事件 |
 | Electron | `if(window.grindLogNative){…}`：開檔、存檔、選單 |
 | 頁籤 | `applyTab` 與鍵盤、點擊事件 |
 | 每日進度 | `addDays`、`normDate`、`dayRow`、`dailyRows`、`addCumulative`、`segHtml`、`dayRowHtml`、`renderDaily` 與分頁事件 |
@@ -99,6 +99,7 @@ header.top（#docTitle、#saveState）
 | `db` | 整份資料，格式見 [format.md](format.md) |
 | `loadProblem` | 讀不出原本資料時的狀態 `{msg, saved, raw, writeFailed?}`；`null` 代表正常。有值時暫停自動儲存 |
 | `editingId` | 表單正在修改的記錄 id；`null` 代表新增模式 |
+| `saveTimer` | 存檔狀態訊息 2.2 秒後消失的計時器 |
 | `page`、`pageSize` | 記錄表的目前頁與每頁筆數（10／20／50） |
 | `focusId` | 剛新增的記錄 id，重畫時翻到它所在的頁，用完清掉 |
 | `tab` | 目前頁籤：`"main"` 或 `"daily"` |
@@ -119,9 +120,15 @@ header.top（#docTitle、#saveState）
 
 `let db = load()` 在 script 很前面就執行，**比後面用 `const` 宣告的東西都早**，例如 `num`、`pctOf`、`fmt*`、`NOT_SAVED*`、`scrollRO`。
 
-- `load()`、`normalize()` 會用到的東西，必須是函式宣告（會被提升）或它們自己的區域變數。例如 `safeStr`、`cleanId`、`numField`、`normDate` 都是函式宣告。
+- `load()`、`normalize()` 會用到的東西，只能是：
+  - 函式宣告（會被提升），例如 `safeStr`、`cleanId`、`numField`、`normDate`。
+  - 它們自己的區域變數。
+  - 宣告在 `let db = load()` 之前的頂層變數，例如 `STORE_KEY`、`loadProblem`。
 - 在這條路徑上用到後面才宣告的 `const`，開機就會拋出 ReferenceError，整頁掛掉。
 - 事件處理函式只在開機後才會執行，可以放心使用任何頂層 `const`。
+
+開機最後的 `render()` 包在 try／catch 裡。畫不出來時，檔案區會顯示「資料有問題，畫面無法完整顯示。請先「匯出 JSON」備份，再「還原示範資料」或匯入正確的檔案。」，按鈕照樣可以用。
+每日進度頁另外有自己的 try／catch，那一頁出錯不會影響練功記錄頁。
 
 ## Electron
 
@@ -129,7 +136,7 @@ header.top（#docTitle、#saveState）
 
 - 視窗 1320×900，最小寬度 760。`contextIsolation: true`、`nodeIntegration: false`，並掛上 `preload.js`。
 - 選單：
-  - 檔案：開啟…（Ctrl／Cmd+O，送出 `menu:open`）、另存新檔…（Ctrl／Cmd+S，送出 `menu:save`）、結束。
+  - 檔案：開啟…（Ctrl／Cmd+O，送出 `menu:open`）、另存新檔…（Ctrl／Cmd+S，送出 `menu:save`）；最後一項在 Windows 是結束，在 macOS 是關閉視窗。
   - 編輯。
   - 檢視：重新整理、開發者工具、縮放、全螢幕。
   - 說明：「資料格式說明」，會開啟 `docs/format.md`。
@@ -137,7 +144,11 @@ header.top（#docTitle、#saveState）
 - IPC：
   - `file:save`：存檔對話框 → 寫檔。
   - `file:open`：開檔對話框 → 讀檔。
-  - 兩者都回傳 `{ok, path, text | error | canceled}`，對話框本身出錯也包成 `{ok:false, error}`。
+  - 回傳格式：
+    - 存檔成功：`{ok:true, path}`。
+    - 開檔成功：`{ok:true, text, path}`。
+    - 取消：`{ok:false, canceled:true}`。
+    - 失敗：`{ok:false, error}`，對話框本身出錯也包成這種格式。
 
 **preload.js**：`window.grindLogNative = {save(text), open(), onMenu(fn)}`。
 

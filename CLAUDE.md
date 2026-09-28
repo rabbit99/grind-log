@@ -29,10 +29,10 @@ Grind Log 練功記錄：記錄練功時段，把「每時段獲得幾 %」換�
 
 ## 絕對不能破壞的規則
 
-- **載入不能掉資料**：從 localStorage 載入時，`normalize()` 只做不會掉資料的轉換。會略過、刪除的規則只在匯入時執行，而且要回報。
+- **載入不能掉資料**：從 localStorage 載入時，`normalize()` 不略過任何一列，只拿掉型別根本不對的東西（見 `docs/format.md` 表格的「載入時也做」欄）。會略過列的規則（無效、重複的等級）只在匯入時執行，而且要回報。
 - **讀不出資料時不能蓋掉原文**：`loadProblem` 期間暫停自動儲存，見 [docs/features/storage-recovery.md](docs/features/storage-recovery.md)。
 - **XSS**：放進 `innerHTML` 的文字一律經過 `esc()`，或者改用 `textContent`。
-- **TDZ**：`load()`、`normalize()` 在開機時、其他頂層 `const` 宣告之前執行，只能用函式宣告和區域變數。
+- **TDZ**：`load()`、`normalize()` 在開機時（`let db = load()` 那一行）就執行，只能用函式宣告、區域變數，以及宣告在那一行之前的頂層變數（例如 `STORE_KEY`、`loadProblem`）。
 - **901px 以上的桌面版外觀**、**資料格式**、**可能刪掉使用者資料的行為**：要改之前先問使用者。
 - **表單的人員選單不能悄悄換人**，見 [docs/features/session-form.md](docs/features/session-form.md)。
 - **效率與費用的分母是計費時數**（`billHours`），不是時段長度。
@@ -52,7 +52,7 @@ Grind Log 練功記錄：記錄練功時段，把「每時段獲得幾 %」換�
 - **預覽**：`.claude/launch.json` 的 `grind-log`，在 localhost:5599。
   - 預覽的 localStorage 裡，`__preview_backup` 是使用者 160 筆真實資料的副本。
   - **測完要把 `grind-log/v1` 還原成它**。
-- **跟 main 對照**：`git show main:index.html > _main_compare.html`，用 iframe 同時載入兩版比較。這個檔案用完刪掉，不要 commit。
+- **跟 main 對照**：`git show main:index.html > _main_compare.html`，用 iframe 同時載入兩版比較。這個檔案已列在 `.gitignore`，用完仍要刪掉；只讀的審查者改放在自己的 scratchpad。
 - **預覽窗格被隱藏時**，ResizeObserver 和 requestAnimationFrame 不會執行，要改用可見的 Electron 視窗量測。
 - **Electron 測試**：`app.setPath("userData", <暫存資料夾>)`，不要動到使用者的資料。
 

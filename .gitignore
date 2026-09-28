@@ -7,3 +7,7 @@ sheet-*.txt
 .claude/
 node_modules/
 dist/
+
+# 測試時跟 main 對照用的暫存副本（見 docs/development.md）
+_main_compare.html
+_prev_compare.html

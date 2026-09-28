@@ -42,9 +42,9 @@ Claude Code 在本機有 `review-merge` skill，會自動跑完第 3～5 步。�
   - 放進 `innerHTML` 的文字一律經過 `esc()`，或者改用 `textContent`。
   - `confirm()` 和 `textContent` 不需要 `esc()`。
 - **載入不能掉資料**：
-  - `normalize(d)`（沒有 `issues`）只做不會掉資料的轉換。
-  - 會略過、刪除的規則只在匯入時執行，而且要寫進 `issues` 回報給使用者。
-- **TDZ**：`load()`、`normalize()` 會在開機時、其他頂層 `const` 宣告之前執行，只能用函式宣告和區域變數，見 [architecture.md](architecture.md#開機順序與-tdz)。
+  - `normalize(d)`（沒有 `issues`）不略過任何一列，只拿掉型別根本不對的東西，見 [format.md](format.md#讀入時的整理) 表格的「載入時也做」欄。
+  - 會略過列的規則（無效、重複的等級）只在匯入時執行，而且要寫進 `issues` 回報給使用者。
+- **TDZ**：`load()`、`normalize()` 會在開機時（`let db = load()` 那一行）就執行，只能用函式宣告、區域變數，以及宣告在那一行之前的頂層變數，見 [architecture.md](architecture.md#開機順序與-tdz)。
 - **不拋出例外**：資料可能是怪的，轉字串用 `safeStr()`，轉數字用 `fin()`、`numOrNaN()`，不要讓一筆壞資料弄垮整個畫面。
 - **重畫模式**：修改 `db` 後呼叫 `persist()` 和 `render()`。事件用委派，掛在 table 或 tbody 上。
 - **UI 偏好和資料分開**：每頁筆數、頁籤這類設定存在 `grind-log/v1:ui`，不放進資料檔。
@@ -68,7 +68,8 @@ Claude Code 在本機有 `review-merge` skill，會自動跑完第 3～5 步。�
 ### 跟 main 對照
 
 1. `git show main:index.html > _main_compare.html` 產生 main 的副本。
-   - 用完刪掉，**絕不 commit**。
+   - 放在 repo 根目錄，預覽伺服器才讀得到。已經列在 `.gitignore`，但用完還是要刪掉，**絕不 commit**。
+   - 只讀的審查者不要在 repo 裡產生檔案，改放在自己的 scratchpad 資料夾，用自己開的伺服器讀取。
 2. 在頁面裡建立 iframe，同時載入 `_main_compare.html` 和 `index.html`，比較：
    - 資料：`db` 去掉 `updatedAt` 後比較。
    - 版面：每個元素的 `getBoundingClientRect()`。
