@@ -9,6 +9,7 @@
 
 「練功記錄」頁左欄「檔案」面板裡的「Google 試算表同步」區塊 `#cloudBox`：
 
+- 標題旁的「隱私權政策」連結，開啟 `privacy.html`：Google 要求使用 OAuth 的首頁要能連到隱私權政策。
 - 「連結 Google 帳號」／「同步」按鈕 `#btnCloudSync`。
 - 「開啟試算表」連結 `#lnkCloudSheet`：連結後才顯示。
 - 「中斷連結」`#btnCloudUnlink`：連結後才顯示。
