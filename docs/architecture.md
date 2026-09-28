@@ -76,7 +76,7 @@ header.top（#docTitle、#saveState）
 | 人員／等級編輯 | 行內編輯與刪除事件、`lvMsg`、`lvLabel`、新增人員、新增等級 |
 | 檔案 | `resumeSaving`、`applyLoaded`、`NOT_SAVED*`、`scrollRO`、`syncLoadBanner`、「下載原始內容」`#btnDownloadRaw` 的事件、`resetEditUI`、`ioMsg`、`download`、`stamp`、`csvCell`、`backupAdvice`、`confirmReplaceUnreadable`，以及匯出、匯入、還原示範、清空的事件 |
 | Electron | `if(window.grindLogNative){…}`：開檔、存檔、選單 |
-| Google 試算表同步 | `GOOGLE_CLIENT_ID`、`cloudEnabled`、`cloud`（同步狀態）、`toSheets`／`fromSheets`／`sheetHash`、`cloudLoadGis`／`cloudGetToken`、`cloudApi` 與各 API 函式、`cloudSync`／`cloudLink`／`cloudStep`／`cloudPutLocal`／`cloudTakeCloud`／`cloudAsk`、`cloudMarkDirty`、`cloudInit`，見 [features/cloud-sync.md](features/cloud-sync.md) |
+| Google 試算表同步 | `GOOGLE_CLIENT_ID`、`cloudEnabled`、`cloud`（同步狀態）、`toSheets`／`fromSheets`／`sheetHash`／`sheetProblem`、`cloudLoadGis`／`cloudGetToken`、`cloudApi` 與各 API 函式、`cloudSync`／`cloudLink`／`cloudStep`／`cloudChoose`／`cloudPutLocal`／`cloudTakeCloud`／`cloudAsk`、`cloudMarkDirty`、`cloudReplaceWarning`、`cloudInit`，見 [features/cloud-sync.md](features/cloud-sync.md) |
 | 頁籤 | `applyTab` 與鍵盤、點擊事件 |
 | 每日進度 | `addDays`、`normDate`、`dayRow`、`dailyRows`、`addCumulative`、`segHtml`、`dayRowHtml`、`renderDaily` 與分頁事件 |
 | 開機 | 表單日期預設今天 → `applyTab()` → `render()` → `syncLoadBanner()` → `cloudInit()` |

@@ -246,6 +246,7 @@
     background:var(--stone-800);color:var(--bone);border:1px solid var(--rule);border-radius:var(--radius);
     padding:18px var(--pad);width:min(460px, calc(100vw - 32px));
   }
+  dialog.cloudask:not([open]){display:none}
   dialog.cloudask::backdrop{background:rgba(0,0,0,.6)}
   dialog.cloudask h3{margin:0 0 10px;font-size:15px}
   dialog.cloudask p{margin:0 0 8px;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
@@ -545,13 +546,13 @@
   </div><!-- /pageDaily -->
 </div>
 
-<dialog class="cloudask" id="cloudDialog">
+<dialog class="cloudask" id="cloudDialog" aria-labelledby="cloudAskTitle" aria-describedby="cloudAskText">
   <h3 id="cloudAskTitle"></h3>
   <div id="cloudAskText"></div>
   <div class="btnrow">
     <button class="primary" id="cloudUseCloud">用雲端的</button>
     <button id="cloudUseLocal">用這台的</button>
-    <button class="ghost" id="cloudUseNone">先不要</button>
+    <button class="ghost" id="cloudUseNone" autofocus>先不要</button>
   </div>
 </dialog>
 
@@ -1542,9 +1543,11 @@ function backupAdvice(){
     ? "讀不出來的原文另外備份著，但換掉之後就不能再按「下載原始內容」，還沒下載的話請先下載。"
     : "讀不出來的原文沒有備份，換掉之後就救不回來。請先按「下載原始內容」存下來。";
 }
-/* 平常匯入不問（跟以前一樣）；讀不出原本的資料時先確認，免得原文來不及下載就被蓋掉 */
+/* 平常匯入不問（跟以前一樣）；讀不出原本的資料時先確認，免得原文來不及下載就被蓋掉。
+   已連結 Google 試算表時也要問：匯入後會上傳，所有裝置的存檔都會換掉 */
 function confirmReplaceUnreadable(){
-  return !loadProblem || confirm("匯入會取代目前的內容。" + backupAdvice());
+  const w = cloudReplaceWarning();
+  return (!loadProblem && !w) || confirm("匯入會取代目前的內容。" + backupAdvice() + w);
 }
 document.getElementById("btnImport").addEventListener("click", ()=> document.getElementById("fileInput").click());
 document.getElementById("fileInput").addEventListener("change", e=>{
@@ -1568,14 +1571,14 @@ document.getElementById("fileInput").addEventListener("change", e=>{
 /* 種子資料只在 localStorage 全空時才會載入，清空或改過之後就回不去了，
    所以給一個明確的還原入口，不必開 DevTools。 */
 document.getElementById("btnDemo").addEventListener("click", ()=>{
-  if(!confirm("用示範資料覆蓋目前的內容？現有的記錄、人員、等級表都會被取代。" + backupAdvice())) return;
+  if(!confirm("用示範資料覆蓋目前的內容？現有的記錄、人員、等級表都會被取代。" + backupAdvice() + cloudReplaceWarning())) return;
   db = normalize(seed()); editingId = null; page = 1; dayPage = 1; resetEditUI(); lvMsg("");
   const saved = resumeSaving(); render();
   ioMsg(`已還原示範資料（${db.sessions.length} 筆）` + (saved ? "" : NOT_SAVED_LATER), saved ? "ok" : "err");
 });
 
 document.getElementById("btnReset").addEventListener("click", ()=>{
-  if(!confirm("全部歸零？記錄、人員、等級表都會清掉，變成完全空白。\n要回到範例狀態請改按「還原示範資料」。" + backupAdvice())) return;
+  if(!confirm("全部歸零？記錄、人員、等級表都會清掉，變成完全空白。\n要回到範例狀態請改按「還原示範資料」。" + backupAdvice() + cloudReplaceWarning())) return;
   db = {schema:"grind-log/v1",meta:{title:"練功記錄",unit:"exp",currency:"TWD"},levels:[],workers:[],sessions:[]};
   editingId = null; page = 1; dayPage = 1; resetEditUI(); lvMsg("");
   const saved = resumeSaving(); render();
@@ -1650,6 +1653,8 @@ const W_COLS = [["id","id"],["name","名稱"],["hourlyRate","時薪"],["billable
 const L_COLS = [["level","等級"],["required","升下一等經驗"],["confidence","可信度"],["note","備註"]];
 const META_KEYS = ["title","unit","currency","updatedAt"];
 const CONF = {measured:"實測", estimated:"推估"};
+/* 讀回來時一定要有的欄位：缺了代表試算表被改壞（例如刪掉工作表、改了欄位名稱），不能拿來取代這台 */
+const REQUIRED_COLS = {"記錄": ["日期","起","迄","等級","獲得%"], "人員": ["id","名稱"], "等級": ["等級","升下一等經驗"]};
 // Electron（file://）用不了 Google 登入元件；沒設用戶端 ID 時整個功能不出現
 const cloudEnabled = !!GOOGLE_CLIENT_ID && /^https?:$/.test(location.protocol) && !window.grindLogNative;
 
@@ -1660,7 +1665,7 @@ let cloud = (()=>{
 })();
 let cloudToken = null;        // {token, exp}：只放記憶體，不寫進 localStorage
 let cloudBusy = false, cloudTimer = null, cloudApplying = false;
-let cloudSeq = 0;             // 每次存檔加一；上傳期間又有修改時，上傳完不能把 dirty 清掉
+let cloudSeq = 0;             // 每次存檔加一；同步期間又有修改時，同步完不能把 dirty 清掉
 function cloudSave(){ try{ cloud ? localStorage.setItem(SYNC_KEY, JSON.stringify(cloud)) : localStorage.removeItem(SYNC_KEY); }catch(e){} }
 function cloudTokenOk(){ return !!cloudToken && Date.now() < cloudToken.exp; }
 
@@ -1748,11 +1753,14 @@ function fromSheets(t){
   });
 }
 /* 試算表內容的指紋，判斷雲端有沒有被改過。不用 Drive 的版本號：試算表的版本號可能延遲更新。
-   updatedAt 不算進去：每次存檔都會變，算進去的話，一台下載後另一台又會以為雲端被改過 */
+   不算進去的：updatedAt（每次存檔都會變，算進去的話一台下載後另一台又會以為雲端被改過），
+   以及「（自動計算）」欄（只是方便看，而且小數精度可能跟寫進去的不完全一樣） */
 function sheetHash(t){
   const norm = TABS.map(name => {
-    const rows = (Array.isArray(t[name]) ? t[name] : []).map(r => {
-      const a = (Array.isArray(r) ? r : []).map(v => v == null ? "" : v);
+    const tab = Array.isArray(t[name]) ? t[name] : [];
+    const head = (Array.isArray(tab[0]) ? tab[0] : []).map(h => safeStr(h).trim());
+    const rows = tab.map(r => {
+      const a = (Array.isArray(r) ? r : []).map(v => v == null ? "" : v).filter((v, i) => !(head[i] || "").endsWith(AUTO));
       while(a.length && a[a.length-1] === "") a.pop();         // 試算表讀回來會去掉每列最後的空白格
       return a;
     }).filter(r => !(name === "設定" && r[0] === "updatedAt"));
@@ -1765,6 +1773,18 @@ function sheetHash(t){
   h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return (h2 >>> 0).toString(36) + "-" + (h1 >>> 0).toString(36);
+}
+/* 讀回來的試算表能不能拿來用：缺工作表、缺必要欄位時回傳原因 */
+function sheetProblem(t){
+  if(!TABS.some(n => Array.isArray(t[n]) && t[n].length)) return "試算表是空的";
+  for(const [name, cols] of Object.entries(REQUIRED_COLS)){
+    const tab = t[name];
+    if(!Array.isArray(tab) || !tab.length) return `少了「${name}」工作表`;
+    const head = (Array.isArray(tab[0]) ? tab[0] : []).map(h => safeStr(h).trim());
+    const miss = cols.filter(c => !head.includes(c));
+    if(miss.length) return `「${name}」工作表缺少欄位：${miss.join("、")}`;
+  }
+  return "";
 }
 
 /* ---- 登入：Google Identity Services 的 token model ---- */
@@ -1780,18 +1800,22 @@ function cloudLoadGis(){
   });
   return cloudLoadGis.p;
 }
-/* 一定要在使用者點擊時呼叫：Google 規定要由使用者操作觸發，不然登入視窗會被擋 */
+/* 一定要在使用者點擊時呼叫：Google 規定要由使用者操作觸發，不然登入視窗會被擋。
+   登入視窗可能一直沒回應（例如被切到背景），3 分鐘後當成失敗，按鈕才不會一直停用 */
 function cloudGetToken(){
   return new Promise((ok, ng)=>{
+    let done = false;
+    const finish = (err) => { if(done) return; done = true; clearTimeout(timer); err ? ng(err) : ok(); };
+    const timer = setTimeout(() => finish(new Error("等太久沒有完成登入，請再按一次")), 180000);
     const client = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID, scope: CLOUD_SCOPE,
       callback: r => {
-        if(r.error) return ng(new Error(r.error === "access_denied" ? "沒有取得 Google 的同意" : "Google 登入失敗：" + r.error));
-        if(!google.accounts.oauth2.hasGrantedAllScopes(r, CLOUD_SCOPE)) return ng(new Error("需要允許存取雲端硬碟裡的檔案才能同步"));
+        if(r.error) return finish(new Error(r.error === "access_denied" ? "沒有取得 Google 的同意" : "Google 登入失敗：" + r.error));
+        if(!google.accounts.oauth2.hasGrantedAllScopes(r, CLOUD_SCOPE)) return finish(new Error("需要允許存取雲端硬碟裡的檔案才能同步"));
         cloudToken = {token: r.access_token, exp: Date.now() + (Number(r.expires_in) - 60) * 1000};
-        ok();
+        finish();
       },
-      error_callback: e => ng(new Error(e && e.type === "popup_closed" ? "登入視窗被關掉了"
+      error_callback: e => finish(new Error(e && e.type === "popup_closed" ? "登入視窗被關掉了"
         : e && e.type === "popup_failed_to_open" ? "登入視窗被瀏覽器擋住了，請再按一次" : "無法開啟 Google 登入視窗"))
     });
     client.requestAccessToken({prompt: ""});
@@ -1800,6 +1824,7 @@ function cloudGetToken(){
 
 /* ---- Drive／Sheets API ---- */
 async function cloudApi(method, url, body){
+  if(!cloudToken){ const e = new Error("Google 權限過期了"); e.auth = true; throw e; }
   const r = await fetch(url, {
     method,
     headers: Object.assign({Authorization: "Bearer " + cloudToken.token}, body ? {"Content-Type": "application/json"} : {}),
@@ -1812,6 +1837,7 @@ async function cloudApi(method, url, body){
   }
   return r.status === 204 ? null : r.json();
 }
+const fileUrl = id => encodeURIComponent(id);
 /* 找這個 App 建立的試算表（drive.file 只看得到 App 自己建立的檔案），有好幾份時取最近修改的 */
 async function cloudFind(){
   const q = "appProperties has { key='grindLog' and value='v1' } and trashed=false";
@@ -1824,22 +1850,24 @@ async function cloudCreate(){
   return f.id;
 }
 async function cloudTabs(id){
-  const r = await cloudApi("GET", SHEETS_API + id + "?fields=" + encodeURIComponent("sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))"));
+  const r = await cloudApi("GET", SHEETS_API + fileUrl(id) + "?fields=" + encodeURIComponent("sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))"));
   return ((r && r.sheets) || []).map(s => s.properties);
 }
 function cloudMissing(){ const e = new Error("找不到雲端的試算表"); e.missing = true; return e; }
+/* 讀雲端：{tabs, hash, empty（記錄、人員、等級都沒有資料列）, problem（格式壞掉的原因）} */
 async function cloudRead(id){
-  try{ const f = await cloudApi("GET", DRIVE_API + "/" + id + "?fields=id,trashed"); if(f.trashed) throw cloudMissing(); }
+  try{ const f = await cloudApi("GET", DRIVE_API + "/" + fileUrl(id) + "?fields=id,trashed"); if(f.trashed) throw cloudMissing(); }
   catch(e){ if(e.status === 404) throw cloudMissing(); throw e; }
   const titles = (await cloudTabs(id)).map(p => p.title);
   const want = TABS.filter(n => titles.includes(n));
   const t = {}; for(const n of TABS) t[n] = [];
   if(want.length){
     const q = want.map(n => "ranges=" + encodeURIComponent("'" + n + "'")).join("&");
-    const r = await cloudApi("GET", SHEETS_API + id + "/values:batchGet?" + q + "&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER");
+    const r = await cloudApi("GET", SHEETS_API + fileUrl(id) + "/values:batchGet?" + q + "&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER");
     ((r && r.valueRanges) || []).forEach((vr, i) => { t[want[i]] = vr.values || []; });
   }
-  return {tabs: t, hash: sheetHash(t)};
+  const empty = !TABS.slice(0,3).some(n => t[n].length > 1);
+  return {tabs: t, hash: sheetHash(t), empty, problem: sheetProblem(t)};
 }
 /* 缺的工作表補上、格子不夠的加大；新建的試算表把預設的第一個工作表改名成「記錄」 */
 async function cloudEnsureTabs(id, t){
@@ -1864,7 +1892,7 @@ async function cloudEnsureTabs(id, t){
     }
   }
   if(!reqs.length) return props;
-  await cloudApi("POST", SHEETS_API + id + ":batchUpdate", {requests: reqs});
+  await cloudApi("POST", SHEETS_API + fileUrl(id) + ":batchUpdate", {requests: reqs});
   return cloudTabs(id);
 }
 /* 寫入：每個工作表一個 updateCells，範圍是整張工作表，沒寫到的格子會被清空。
@@ -1879,7 +1907,7 @@ async function cloudWrite(id, t){
     rows: t[n].map(r => ({values: r.map(cv)})),
     fields: "userEnteredValue"
   }}));
-  await cloudApi("POST", SHEETS_API + id + ":batchUpdate", {requests});
+  await cloudApi("POST", SHEETS_API + fileUrl(id) + ":batchUpdate", {requests});
   return sheetHash(t);
 }
 
@@ -1888,8 +1916,8 @@ async function cloudSync(interactive){
   if(!cloudEnabled || cloudBusy) return;
   cloudBusy = true; clearTimeout(cloudTimer);
   const seq0 = cloudSeq;
-  const btn = document.getElementById("btnCloudSync");
-  btn.disabled = true;
+  const btn = document.getElementById("btnCloudSync"), unlink = document.getElementById("btnCloudUnlink");
+  btn.disabled = true; unlink.disabled = true;           // 同步中不能中斷連結，免得權杖被清掉
   try{
     if(!cloudTokenOk()){
       if(!interactive){ cloudStatus(cloud && cloud.dirty ? "有修改還沒同步，按「同步」上傳" : "按「同步」取得最新資料"); return; }
@@ -1898,47 +1926,66 @@ async function cloudSync(interactive){
       await cloudGetToken();
     }
     cloudStatus("同步中…");
-    if(!cloud) await cloudLink(); else await cloudStep(interactive);
+    if(!cloud){ if(interactive) await cloudLink(); } else await cloudStep(interactive);
   }catch(e){
     cloudStatus(e && e.auth ? "Google 權限過期了，按「同步」重新連線" : "同步失敗：" + (safeStr(e && e.message) || "不明原因"), "err");
   }finally{
-    cloudBusy = false; btn.disabled = false; cloudRender();
+    cloudBusy = false; btn.disabled = false; unlink.disabled = false; cloudRender();
     // 同步期間又有修改：再排一次上傳。沒有新修改時不重排，免得失敗時一直重試
     if(cloud && cloud.dirty && cloudSeq !== seq0 && cloudTokenOk() && !loadProblem) cloudSchedule();
   }
 }
-/* 第一次連結：雲端沒有就建立；有的話內容一樣直接連上，不一樣就問 */
+/* 讓使用者選，選完再讀一次雲端：對話框可能開了很久，這段期間雲端又被改過的話要重新問，
+   不然「用這台的」會蓋掉使用者根本沒看過的修改。回傳 {ch, r}，ch 是 "cloud"、"local" 或 null */
+async function cloudChoose(kind, r, id){
+  let again = false;
+  for(;;){
+    const ch = await cloudAsk(kind, r, again);
+    if(!ch) return {ch: null, r};
+    const r2 = await cloudRead(id);
+    if(r2.hash === r.hash) return {ch, r: r2};
+    r = r2; again = true;
+    // 新的內容壞掉了就不能選「用雲端的」；原本壞掉、現在修好了就回到一般的選擇
+    if(r.problem) kind = "corrupt";
+    else if(kind === "corrupt") kind = loadProblem ? "unreadable" : cloud ? "conflict" : "first";
+  }
+}
+/* 第一次連結（只有使用者按按鈕時）：雲端沒有資料就直接寫入；有的話內容一樣直接連上，不一樣就問 */
 async function cloudLink(){
   const id = await cloudFind();
-  let r = id ? await cloudRead(id) : null;
-  const empty = r && !TABS.slice(0,3).some(n => r.tabs[n].length > 1);   // 建立後還沒寫進資料的空試算表
-  if(!id || empty){
+  const r = id ? await cloudRead(id) : null;
+  if(!id || r.empty){
     if(loadProblem){ cloudStatus("這台的資料讀不出來，不能建立雲端存檔。請先處理上方的紅框提示", "err"); return; }
     const fid = id || await cloudCreate();
     const seq = cloudSeq;
     const hash = await cloudWrite(fid, toSheets());
-    cloud = {fileId: fid, hash, dirty: cloudSeq !== seq};        // 寫成功才算連結，失敗時下次重來
+    cloud = {fileId: fid, hash, dirty: cloudSeq !== seq};        // 寫成功才算連結；上傳期間又有修改就標成還沒上傳
     cloudSave();
-    cloudStatus("已在你的 Google 雲端硬碟建立試算表並上傳", "ok");
+    cloudStatus(id ? "已連結雲端的試算表並上傳這台的資料" : "已在你的 Google 雲端硬碟建立試算表並上傳", "ok");
+    if(cloud.dirty) cloudSchedule();
     return;
   }
-  if(!loadProblem && r.hash === sheetHash(toSheets())){
+  const bad = `雲端的試算表格式不對（${r.problem}），還沒連結。可以到試算表的「檔案 → 版本記錄」還原`;
+  if(r.problem && loadProblem){ cloudStatus(bad, "err"); return; }
+  if(!loadProblem && !r.problem && r.hash === sheetHash(toSheets())){
     cloud = {fileId: id, hash: r.hash, dirty: false}; cloudSave();
     cloudStatus("已連結，資料是最新的", "ok");
     return;
   }
-  const ch = await cloudAsk(loadProblem ? "unreadable" : "first", r);
-  if(!ch){ cloudStatus("還沒連結：雲端和這台的資料不一樣，等你決定要用哪一份"); return; }
-  if(ch === "cloud"){
-    // hash 先留空：換資料成功後 cloudTakeCloud 才記下雲端的指紋。中途失敗時下次同步會再試一次，
-    // 不會誤以為兩邊已經一樣
+  const res = await cloudChoose(r.problem ? "corrupt" : loadProblem ? "unreadable" : "first", r, id);
+  if(!res.ch){ cloudStatus(res.r.problem ? bad : "還沒連結：雲端和這台的資料不一樣，等你決定要用哪一份", res.r.problem ? "err" : ""); return; }
+  if(res.ch === "cloud"){
+    // hash 先留空：換資料而且寫進這台之後，cloudTakeCloud 才記下雲端的指紋。
+    // 中途失敗或取消就不算連結，不會誤以為兩邊已經一樣
     cloud = {fileId: id, hash: null, dirty: false};
-    if(!(await cloudTakeCloud(r, !loadProblem))) cloud = null;
+    let ok = false;
+    try{ ok = await cloudTakeCloud(res.r); }
+    finally{ if(!ok){ cloud = null; } cloudSave(); }
   }else{
-    cloud = {fileId: id, hash: r.hash, dirty: true};
+    cloud = {fileId: id, hash: res.r.hash, dirty: true};
+    cloudSave();
     await cloudPutLocal();
   }
-  cloudSave();
 }
 async function cloudStep(interactive){
   let r;
@@ -1952,22 +1999,29 @@ async function cloudStep(interactive){
     cloud = null; cloudSave();
     return cloudLink();
   }
-  // 這台的資料讀不出來：畫面上是空白資料，只能選擇改用雲端的，絕不上傳
-  if(loadProblem){
-    if(!interactive){ cloudStatus("讀不出原本資料的期間不會上傳", "err"); return; }
-    const ch = await cloudAsk("unreadable", r);
-    if(ch === "cloud") await cloudTakeCloud(r, false);
-    else cloudStatus("讀不出原本資料的期間不會上傳", "err");
-    return;
-  }
   const changed = r.hash !== cloud.hash;
-  if(!changed && !cloud.dirty){ cloudStatus("已是最新", "ok"); return; }
-  if(!changed){ await cloudPutLocal(); return; }
-  if(!cloud.dirty){ await cloudTakeCloud(r, false); return; }
-  const ch = await cloudAsk("conflict", r);
-  if(ch === "cloud") await cloudTakeCloud(r, true);
-  else if(ch === "local") await cloudPutLocal();
-  else cloudStatus("兩邊都有修改，還沒同步。按「同步」再選一次", "err");
+  let kind;
+  if(changed && r.problem){
+    // 雲端被改壞（缺工作表、欄位名稱被改）：不能拿來取代這台；使用者可以選用這台的資料重新寫入
+    if(!interactive || loadProblem){ cloudStatus(`雲端的試算表格式不對（${r.problem}），按「同步」處理，或到試算表的「檔案 → 版本記錄」還原`, "err"); return; }
+    kind = "corrupt";
+  }else if(loadProblem){
+    // 這台的資料讀不出來：畫面上是空白資料，只能選擇改用雲端的，絕不上傳
+    if(!interactive){ cloudStatus("讀不出原本資料的期間不會上傳", "err"); return; }
+    kind = "unreadable";
+  }else{
+    if(!changed && !cloud.dirty){ cloudStatus("已是最新", "ok"); return; }
+    if(!changed){ await cloudPutLocal(); return; }
+    if(!cloud.dirty){ await cloudTakeCloud(r); return; }
+    // 兩邊都改過：自動上傳時只提示，不在使用者打字時突然跳出對話框；按「同步」時才問
+    if(!interactive){ cloudStatus("雲端被別的裝置改過，這台也有修改。按「同步」選擇要用哪一份", "err"); return; }
+    kind = "conflict";
+  }
+  const res = await cloudChoose(kind, r, cloud.fileId);
+  if(res.ch === "cloud") await cloudTakeCloud(res.r);
+  else if(res.ch === "local") await cloudPutLocal();
+  else cloudStatus(res.r.problem ? `雲端的試算表格式不對（${res.r.problem}），還沒同步`
+    : loadProblem ? "讀不出原本資料的期間不會上傳" : "兩邊都有修改，還沒同步。按「同步」再選一次", "err");
 }
 async function cloudPutLocal(){
   if(loadProblem){ cloudStatus("讀不出原本資料的期間不會上傳", "err"); return; }
@@ -1977,11 +2031,12 @@ async function cloudPutLocal(){
   cloudSave();
   cloudStatus("已上傳到雲端", "ok");
 }
-/* 用雲端的資料取代這台。backupLocal：這台有未上傳的修改時，先另存一份備份。
+/* 用雲端的資料取代這台。取代前一律先另存這台的資料（讀不出資料時畫面是空白的，不用存）。
    回傳 true 表示換好了；使用者取消時回傳 false；換資料失敗時丟出例外（applyLoaded 會退回原本的資料） */
-async function cloudTakeCloud(r, backupLocal){
-  if(backupLocal){
-    try{ localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify({savedAt: new Date().toISOString(), data: db})); }
+async function cloudTakeCloud(r){
+  let backedUp = false;
+  if(!loadProblem){
+    try{ localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify({savedAt: new Date().toISOString(), data: db})); backedUp = true; }
     catch(e){
       if(!confirm("這台的資料備份存不進去（可能是空間不足）。確定要用雲端的取代嗎？建議先按取消，「匯出 JSON」另存一份。")){
         cloudStatus("沒有同步", "err"); return false;
@@ -1994,58 +2049,79 @@ async function cloudTakeCloud(r, backupLocal){
   let saved;
   try{ saved = applyLoaded(d); }
   finally{ cloudApplying = false; }
-  cloud.hash = r.hash;
-  // 整理後跟雲端的內容不一樣（例如補零、自動編號）：標成有修改，之後上傳整理過的版本
-  cloud.dirty = sheetHash(toSheets()) !== r.hash;
+  if(saved){
+    cloud.hash = r.hash;
+    // 整理後跟雲端的內容不一樣（例如補零、自動編號）：標成有修改，之後上傳整理過的版本
+    cloud.dirty = sheetHash(toSheets()) !== r.hash;
+  }
+  // 寫不進這台時不記下雲端的指紋：這台存著的還是舊資料，下次同步要重新拿雲端的
   cloudSave();
-  cloudStatus("已從雲端更新" + (backupLocal ? "（這台原本的資料已另存備份）" : "")
+  cloudStatus("已從雲端更新" + (backedUp ? "（這台原本的資料已另存備份）" : "")
     + (issues.length ? "；自動整理：" + issues.map(i=>i.msg).join("、") : "") + (saved ? "" : NOT_SAVED),
     !saved || issues.some(i=>i.warn) ? "err" : "ok");
-  if(cloud.dirty && !loadProblem) cloudSchedule();
+  if(saved && cloud.dirty && !loadProblem) cloudSchedule();
   return true;
 }
-/* 兩邊不一樣時讓使用者選。回傳 "cloud"、"local" 或 null（先不要） */
-function cloudAsk(kind, r){
+/* 兩邊不一樣時讓使用者選。回傳 "cloud"、"local" 或 null（先不要）。預設焦點在「先不要」，避免誤按。
+   again：上一次選完後發現雲端又被改過，這是重新問 */
+function cloudAsk(kind, r, again){
   const dlg = document.getElementById("cloudDialog");
   const c = fromSheets(r.tabs);
   const when = v => { const t = Date.parse(v); return isNaN(t) ? "不明" : new Date(t).toLocaleString("zh-TW", {hour12: false}); };
+  let neverSaved = false;
+  try{ neverSaved = localStorage.getItem(STORE_KEY) === null; }catch(e){}
   const cloudLine = `雲端：${c.sessions.length} 筆記錄，最後修改 ${when(c.meta.updatedAt)}`;
-  const localLine = loadProblem ? "這台：原本的資料讀不出來" : `這台：${db.sessions.length} 筆記錄，最後修改 ${when(db.meta.updatedAt)}`;
+  const localLine = loadProblem ? "這台：原本的資料讀不出來"
+    : neverSaved ? `這台：示範資料（${db.sessions.length} 筆，還沒有自己的記錄）`
+    : `這台：${db.sessions.length} 筆記錄，最後修改 ${when(db.meta.updatedAt)}`;
+  const note = "「用雲端的」會先把這台的資料另存一份備份；「用這台的」會取代雲端，被取代的內容可以從試算表的「檔案 → 版本記錄」找回。";
   const text = {
-    first: ["這個 Google 帳號的雲端硬碟已經有一份存檔，跟這台的資料不一樣。要用哪一份？", cloudLine, localLine,
-      "「用雲端的」會先把這台的資料另存一份備份；「用這台的」會取代雲端，被取代的內容可以從試算表的「檔案 → 版本記錄」找回。"],
-    conflict: ["上次同步之後，雲端的試算表被別的裝置或手動改過，這台也有還沒上傳的修改。要用哪一份？", cloudLine, localLine,
-      "「用雲端的」會先把這台的資料另存一份備份；「用這台的」會取代雲端，被取代的內容可以從試算表的「檔案 → 版本記錄」找回。"],
-    unreadable: ["這台原本的資料讀不出來，可以改用雲端的存檔。", cloudLine, backupAdvice()]
+    first: ["這個 Google 帳號的雲端硬碟已經有一份存檔，跟這台的資料不一樣。要用哪一份？", cloudLine, localLine, note],
+    conflict: ["上次同步之後，雲端的試算表被別的裝置或手動改過，這台也有還沒上傳的修改。要用哪一份？", cloudLine, localLine, note],
+    unreadable: ["這台原本的資料讀不出來，可以改用雲端的存檔。", cloudLine, backupAdvice()],
+    corrupt: [`雲端的試算表格式不對（${r.problem}），不能拿來用。要用這台的資料重新寫入嗎？`, localLine,
+      "也可以先按「先不要」，到試算表的「檔案 → 版本記錄」還原成之前的版本。"]
   }[kind];
   document.getElementById("cloudAskTitle").textContent =
-    kind === "first" ? "雲端已經有一份存檔" : kind === "conflict" ? "雲端和這台都改過" : "要改用雲端的存檔嗎？";
+    {first: "雲端已經有一份存檔", conflict: "雲端和這台都改過", unreadable: "要改用雲端的存檔嗎？", corrupt: "雲端的試算表格式不對"}[kind];
   const box = document.getElementById("cloudAskText");
   box.textContent = "";
-  for(const t of text){ const p = document.createElement("p"); p.textContent = t; box.appendChild(p); }
-  const local = document.getElementById("cloudUseLocal");
-  local.hidden = kind === "unreadable";
-  local.disabled = !!loadProblem;          // 讀不出資料時畫面上是空白的，絕不上傳
+  for(const t of again ? ["雲端剛剛又被改過，下面是最新的內容，請再選一次。", ...text] : text){
+    const p = document.createElement("p"); p.textContent = t; box.appendChild(p);
+  }
+  if(again) box.firstChild.className = "msg err";
+  const useCloud = document.getElementById("cloudUseCloud"), useLocal = document.getElementById("cloudUseLocal");
+  const none = document.getElementById("cloudUseNone");
+  useCloud.hidden = kind === "corrupt";
+  useLocal.hidden = kind === "unreadable";
+  useLocal.disabled = !!loadProblem;          // 讀不出資料時畫面上是空白的，絕不上傳
   return new Promise(ok => {
     const done = v => { dlg.close(); ok(v); };
-    document.getElementById("cloudUseCloud").onclick = () => done("cloud");
-    local.onclick = () => done("local");
-    document.getElementById("cloudUseNone").onclick = () => done(null);
+    useCloud.onclick = () => done("cloud");
+    useLocal.onclick = () => done("local");
+    none.onclick = () => done(null);
     dlg.oncancel = e => { e.preventDefault(); done(null); };      // Esc
     dlg.showModal();
+    none.focus();
   });
 }
 function cloudSchedule(){
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(() => cloudSync(false), 2000);
 }
-/* persist() 寫入成功後呼叫：標記這台有修改，約 2 秒後自動上傳 */
+/* persist() 寫入成功後呼叫：標記這台有修改，約 2 秒後自動上傳。
+   cloudSeq 在連結中（cloud 還是 null）也要加：建立試算表的流程靠它判斷上傳期間有沒有新修改 */
 function cloudMarkDirty(){
-  if(!cloudEnabled || !cloud || cloudApplying) return;
+  if(!cloudEnabled || cloudApplying) return;
   cloudSeq++;
+  if(!cloud) return;
   if(!cloud.dirty){ cloud.dirty = true; cloudSave(); }
   if(cloudTokenOk()) cloudSchedule();
   else cloudStatus("有修改還沒同步，按「同步」上傳");
+}
+/* 換掉整份資料（匯入、還原示範、清空）的確認框要說清楚雲端也會跟著換 */
+function cloudReplaceWarning(){
+  return cloudEnabled && cloud ? "\n\n已連結 Google 試算表：確定後雲端的存檔也會被換掉（可以從試算表的「檔案 → 版本記錄」找回）。" : "";
 }
 function cloudStatus(t, cls){
   const el = document.getElementById("cloudMsg");
@@ -2085,6 +2161,7 @@ document.getElementById("btnCloudBackup").addEventListener("click", () => {
   cloudStatus("已下載這台被雲端取代前的資料。要還原的話，用「匯入 JSON」載入", "ok");
 });
 document.getElementById("btnCloudUnlink").addEventListener("click", () => {
+  if(cloudBusy) return;
   if(!confirm("中斷連結？雲端的試算表會保留，之後再連結可以找回。")) return;
   if(cloudToken && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(cloudToken.token, () => {});
   cloudToken = null; cloud = null; cloudSave(); clearTimeout(cloudTimer);
