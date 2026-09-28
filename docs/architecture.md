@@ -8,6 +8,7 @@
 | `main.js` | Electron 主程序：視窗、選單、開檔／存檔對話框（IPC） |
 | `preload.js` | Electron preload：用 `contextBridge` 提供 `window.grindLogNative` |
 | `package.json` | Electron 啟動設定（`npm start`） |
+| `privacy.html` | 隱私權政策（靜態頁）。Google OAuth 同意畫面的「隱私權政策網址」指向線上版的這一頁 |
 | `docs/` | 開發文件 |
 | `CLAUDE.md` | 給 Claude Code 的開發指引 |
 

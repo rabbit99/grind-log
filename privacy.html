@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>隱私權政策 — Grind Log 練功記錄</title>
+<style>
+  :root{
+    --stone-900:#131820;
+    --stone-800:#1B2029;
+    --rule:#313B4A;
+    --bone:#E7E1D3;
+    --bone-dim:#9AA2AF;
+    --gold:#C9A227;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--stone-900);color:var(--bone);
+    font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC","Hiragino Sans TC",system-ui,sans-serif;
+    font-size:15px;line-height:1.75;
+  }
+  main{max-width:760px;margin:0 auto;padding:32px 16px 48px}
+  h1{font-size:24px;margin:0 0 4px;color:var(--gold)}
+  h2{font-size:17px;margin:32px 0 8px;padding-top:16px;border-top:1px solid var(--rule)}
+  p,li{overflow-wrap:anywhere}
+  ul{padding-left:1.4em}
+  a{color:var(--gold)}
+  code{background:var(--stone-800);border:1px solid var(--rule);border-radius:3px;padding:1px 5px;font-size:13px}
+  .dim{color:var(--bone-dim);font-size:13px}
+  .en{margin-top:40px}
+</style>
+</head>
+<body>
+<main>
+  <h1>隱私權政策</h1>
+  <p class="dim">Grind Log 練功記錄　最後更新：2026-09-29</p>
+
+  <p>
+    Grind Log 練功記錄（以下稱「本工具」，網址 <a href="https://rabbit99.github.io/grind-log/">https://rabbit99.github.io/grind-log/</a>）
+    是在瀏覽器裡執行的網頁工具，用來記錄練功時段，並計算效率與成本。
+    本工具沒有後端伺服器、沒有會員系統，也沒有廣告或流量分析追蹤。
+  </p>
+
+  <h2>你的資料存在哪裡</h2>
+  <ul>
+    <li>你輸入的記錄存在你自己瀏覽器的儲存空間（localStorage），只在那台裝置上。</li>
+    <li>使用「Google 試算表同步」時，資料會另外存到<strong>你自己的 Google 雲端硬碟</strong>裡的一份試算表「練功記錄（Grind Log）」。</li>
+    <li>資料直接在你的瀏覽器和 Google 之間傳送，不經過本工具開發者或任何第三方的伺服器。開發者看不到你的資料。</li>
+  </ul>
+
+  <h2>Google 使用者資料的使用方式</h2>
+  <p>只有在你按下「連結 Google 帳號」並同意後，本工具才會存取 Google 服務：</p>
+  <ul>
+    <li>
+      只要求一個權限：<code>https://www.googleapis.com/auth/drive.file</code>。
+      這個權限只能存取本工具自己建立的檔案，<strong>看不到你雲端硬碟裡的其他檔案</strong>。
+    </li>
+    <li>唯一的用途是建立、讀取、更新上述那份試算表，讓你的不同裝置共用同一份存檔。</li>
+    <li>不讀取你的姓名、電子郵件、聯絡人，或其他 Google 帳號資料。</li>
+    <li>Google 核發的存取權杖只放在瀏覽器的記憶體裡，關閉頁面就消失；不會寫進儲存空間，也不會傳給任何人。</li>
+    <li>不會出售或轉移 Google 使用者資料，不用於廣告，也不用來訓練人工智慧模型。</li>
+    <li>
+      本工具使用及轉移從 Google API 取得的資訊時，會遵守
+      <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API 服務使用者資料政策</a>，包括其中的「有限使用」規定。
+    </li>
+  </ul>
+
+  <h2>第三方服務</h2>
+  <ul>
+    <li>
+      Google 登入元件（<code>accounts.google.com</code>）只在使用同步功能時載入。
+      Google 如何處理資料，請見 <a href="https://policies.google.com/privacy">Google 隱私權政策</a>。
+    </li>
+    <li>
+      本工具的網頁由 GitHub Pages 提供，GitHub 可能為了安全與維運記錄一般的連線資訊（例如 IP 位址）。
+      請見 <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub 一般隱私權聲明</a>。
+    </li>
+  </ul>
+
+  <h2>刪除資料與撤銷權限</h2>
+  <ul>
+    <li>刪除這台裝置上的資料：清除瀏覽器裡這個網站的資料。本工具的「清空全部」會清掉記錄、人員和等級表。</li>
+    <li>刪除雲端的資料：在 Google 雲端硬碟刪除「練功記錄（Grind Log）」試算表。</li>
+    <li>
+      撤銷本工具存取 Google 的權限：到
+      <a href="https://myaccount.google.com/connections">Google 帳戶的「第三方應用程式和服務」</a>移除本工具。
+      在本工具按「中斷連結」時，如果這次開啟頁面後已經同步過，也會一併撤銷。
+    </li>
+  </ul>
+
+  <h2>政策變更</h2>
+  <p>本政策如有修改，會更新這一頁和上方的日期。</p>
+
+  <h2>聯絡方式</h2>
+  <p>有任何問題，請到 <a href="https://github.com/rabbit99/grind-log/issues">GitHub Issues</a> 留言。</p>
+
+  <section class="en" lang="en">
+    <h2>Privacy Policy (English summary)</h2>
+    <ul>
+      <li>Grind Log is a browser-only web app. It has no backend server, no user accounts, and no ads or analytics.</li>
+      <li>Your records are stored in your browser's localStorage. If you turn on Google Sheets sync, they are also stored in a spreadsheet in <strong>your own Google Drive</strong>. Data goes directly between your browser and Google; the developer never receives it.</li>
+      <li>The only Google scope requested is <code>https://www.googleapis.com/auth/drive.file</code>, which gives access only to files this app created. It is used solely to create, read and update that one spreadsheet so your devices can share the same data.</li>
+      <li>The app does not read your name, email address, contacts or any other Google account data. Access tokens are kept in memory only and are never stored or shared.</li>
+      <li>Google user data is never sold, transferred, used for advertising, or used to train AI models. Grind Log's use and transfer of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</li>
+      <li>To delete your data, clear this site's data in your browser and delete the spreadsheet from Google Drive. To revoke access, remove the app at <a href="https://myaccount.google.com/connections">Google Account → Third-party apps &amp; services</a>.</li>
+      <li>Contact: <a href="https://github.com/rabbit99/grind-log/issues">GitHub Issues</a>.</li>
+    </ul>
+  </section>
+
+  <p class="dim" style="margin-top:40px"><a href="./">← 回到 Grind Log 練功記錄</a></p>
+</main>
+</body>
+</html>

@@ -116,3 +116,4 @@ Claude Code 在本機有 `review-merge` skill，會自動跑完第 3～5 步。�
 | 開發流程、測試方法 | 本文件 |
 | 新發現、這次不修的問題 | `docs/tech-debt.md` |
 | 使用者看得到的用法 | 根目錄的 `README.md` |
+| 資料存放位置、會傳給誰、Google 權限 | 根目錄的 `privacy.html`（公開的隱私權政策，要跟程式行為一致） |

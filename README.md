@@ -101,6 +101,7 @@ CSV 帶 BOM，中文在 Excel 不會亂碼。任何一格的文字以 `=`、`+`�
 |---|---|
 | `index.html` | 主程式，單一檔案、可離線、三種用法共用 |
 | `main.js` / `preload.js` / `package.json` | Electron 桌面版 |
+| `privacy.html` | 隱私權政策（線上版 https://rabbit99.github.io/grind-log/privacy.html ） |
 | `docs/` | 開發文件：[索引](docs/README.md)、[資料格式](docs/format.md)、[技術債與已知限制](docs/tech-debt.md) |
 | `CLAUDE.md` | 給 Claude Code 的開發指引 |
 

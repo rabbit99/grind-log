@@ -62,6 +62,7 @@ Grind Log 練功記錄：記錄練功時段，把「每時段獲得幾 %」換�
 |---|---|
 | `index.html` | 全部程式。區段地圖見 [docs/architecture.md](docs/architecture.md) |
 | `main.js`、`preload.js`、`package.json` | Electron 桌面版 |
+| `privacy.html` | 隱私權政策，Google OAuth 同意畫面要求的網址。改到資料存放位置或 Google 權限時要一起更新 |
 | `README.md` | 給使用者的說明 |
 | `docs/` | 開發文件：架構、計算、格式、功能定義、開發流程、技術債 |
 | `grind-log-*.json` | 使用者的真實資料（已被 gitignore，只讀，不要 commit） |
