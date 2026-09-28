@@ -116,7 +116,7 @@ header.top（#docTitle、#saveState）
 | `grind-log/v1:ui` | UI 偏好：`{pageSize, tab, dayPageSize}` |
 | `grind-log/v1:unreadable`、`grind-log/v1:unreadable-<時間戳>` | 讀不出來的原文備份，見 [features/storage-recovery.md](features/storage-recovery.md) |
 | `grind-log/v1:sync` | Google 試算表同步狀態：`{fileId, hash, dirty}`，見 [features/cloud-sync.md](features/cloud-sync.md) |
-| `grind-log/v1:local-backup` | 「用雲端的」取代這台之前另存的資料 `{savedAt, data}`，只留最新一份 |
+| `grind-log/v1:local-backup` | 「用雲端的」取代這台之前另存的資料 `{savedAt, data}`，只有一份；一般下載不會蓋掉已有的備份，見 [features/cloud-sync.md](features/cloud-sync.md) |
 
 Google 的存取權杖只放在記憶體，不寫進 localStorage。
 

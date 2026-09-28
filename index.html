@@ -1653,8 +1653,16 @@ const W_COLS = [["id","id"],["name","名稱"],["hourlyRate","時薪"],["billable
 const L_COLS = [["level","等級"],["required","升下一等經驗"],["confidence","可信度"],["note","備註"]];
 const META_KEYS = ["title","unit","currency","updatedAt"];
 const CONF = {measured:"實測", estimated:"推估"};
-/* 讀回來時一定要有的欄位：缺了代表試算表被改壞（例如刪掉工作表、改了欄位名稱），不能拿來取代這台 */
-const REQUIRED_COLS = {"記錄": ["日期","起","迄","等級","獲得%"], "人員": ["id","名稱"], "等級": ["等級","升下一等經驗"]};
+/* 讀回來時一定要有的欄位：toSheets 寫出的欄位缺了任何一個，都代表試算表被改壞（刪掉工作表、改了欄位名稱），
+   不能拿來取代這台。只檢查幾個重要欄位不夠：「啟用」「人員 id」被改名時，讀回來會悄悄變成全部啟用、
+   找不到人員，接著又自動上傳到所有裝置 */
+const REQUIRED_COLS = {
+  "記錄": [...S_COLS.map(c => c[1]), EXTRA],
+  "人員": [...W_COLS.map(c => c[1]), EXTRA],
+  "等級": [...L_COLS.map(c => c[1]), EXTRA],
+  "設定": ["欄位", "值"]
+};
+const REQUIRED_SET = ["schema", "title", "unit", "currency", "meta " + EXTRA, EXTRA];    // 「設定」工作表第一欄一定要有的列
 // Electron（file://）用不了 Google 登入元件；沒設用戶端 ID 時整個功能不出現
 const cloudEnabled = !!GOOGLE_CLIENT_ID && /^https?:$/.test(location.protocol) && !window.grindLogNative;
 
@@ -1784,6 +1792,9 @@ function sheetProblem(t){
     const miss = cols.filter(c => !head.includes(c));
     if(miss.length) return `「${name}」工作表缺少欄位：${miss.join("、")}`;
   }
+  const keys = t["設定"].slice(1).map(r => Array.isArray(r) ? safeStr(r[0]).trim() : "");
+  const missSet = REQUIRED_SET.filter(k => !keys.includes(k));
+  if(missSet.length) return `「設定」工作表缺少：${missSet.join("、")}`;
   return "";
 }
 
@@ -1945,8 +1956,9 @@ async function cloudChoose(kind, r, id){
     const r2 = await cloudRead(id);
     if(r2.hash === r.hash) return {ch, r: r2};
     r = r2; again = true;
-    // 新的內容壞掉了就不能選「用雲端的」；原本壞掉、現在修好了就回到一般的選擇
-    if(r.problem) kind = "corrupt";
+    // 新的內容壞掉了就不能選「用雲端的」；讀不出這台的資料時也不能選「用這台的」，就沒有可以選的了。
+    // 原本壞掉、現在修好了就回到一般的選擇
+    if(r.problem){ if(loadProblem) return {ch: null, r}; kind = "corrupt"; }
     else if(kind === "corrupt") kind = loadProblem ? "unreadable" : cloud ? "conflict" : "first";
   }
 }
@@ -1979,7 +1991,7 @@ async function cloudLink(){
     // 中途失敗或取消就不算連結，不會誤以為兩邊已經一樣
     cloud = {fileId: id, hash: null, dirty: false};
     let ok = false;
-    try{ ok = await cloudTakeCloud(res.r); }
+    try{ ok = await cloudTakeCloud(res.r, true); }
     finally{ if(!ok){ cloud = null; } cloudSave(); }
   }else{
     cloud = {fileId: id, hash: res.r.hash, dirty: true};
@@ -2003,7 +2015,9 @@ async function cloudStep(interactive){
   let kind;
   if(changed && r.problem){
     // 雲端被改壞（缺工作表、欄位名稱被改）：不能拿來取代這台；使用者可以選用這台的資料重新寫入
-    if(!interactive || loadProblem){ cloudStatus(`雲端的試算表格式不對（${r.problem}），按「同步」處理，或到試算表的「檔案 → 版本記錄」還原`, "err"); return; }
+    // 讀不出這台的資料時也不能重新寫入，按「同步」沒有用，只能到版本記錄還原
+    if(!interactive || loadProblem){ cloudStatus(`雲端的試算表格式不對（${r.problem}），`
+      + (loadProblem ? "請到試算表的「檔案 → 版本記錄」還原" : "按「同步」處理，或到試算表的「檔案 → 版本記錄」還原"), "err"); return; }
     kind = "corrupt";
   }else if(loadProblem){
     // 這台的資料讀不出來：畫面上是空白資料，只能選擇改用雲端的，絕不上傳
@@ -2031,14 +2045,21 @@ async function cloudPutLocal(){
   cloudSave();
   cloudStatus("已上傳到雲端", "ok");
 }
-/* 用雲端的資料取代這台。取代前一律先另存這台的資料（讀不出資料時畫面是空白的，不用存）。
+/* 用雲端的資料取代這台。取代前先另存這台的資料，備份只留一份：
+   - 這台有雲端沒有的資料（有未上傳的修改、第一次連結 first=true）：一定存，蓋掉舊的備份。
+   - 一般下載（這台沒有未上傳的修改）：這台的內容就是雲端的上一版，可以從試算表的版本記錄找回。
+     只在還沒有備份時才存，免得衝突時留下的、別處都沒有的備份被一次普通的下載蓋掉。
+   - 讀不出資料時畫面是空白的，不用存。
    回傳 true 表示換好了；使用者取消時回傳 false；換資料失敗時丟出例外（applyLoaded 會退回原本的資料） */
-async function cloudTakeCloud(r){
+async function cloudTakeCloud(r, first){
   let backedUp = false;
-  if(!loadProblem){
+  const unique = first || cloud.dirty;
+  let hasBackup = false;
+  try{ hasBackup = !!localStorage.getItem(LOCAL_BACKUP_KEY); }catch(e){}
+  if(!loadProblem && (unique || !hasBackup)){
     try{ localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify({savedAt: new Date().toISOString(), data: db})); backedUp = true; }
     catch(e){
-      if(!confirm("這台的資料備份存不進去（可能是空間不足）。確定要用雲端的取代嗎？建議先按取消，「匯出 JSON」另存一份。")){
+      if(unique && !confirm("這台的資料備份存不進去（可能是空間不足）。確定要用雲端的取代嗎？建議先按取消，「匯出 JSON」另存一份。")){
         cloudStatus("沒有同步", "err"); return false;
       }
     }
@@ -2074,16 +2095,22 @@ function cloudAsk(kind, r, again){
   const localLine = loadProblem ? "這台：原本的資料讀不出來"
     : neverSaved ? `這台：示範資料（${db.sessions.length} 筆，還沒有自己的記錄）`
     : `這台：${db.sessions.length} 筆記錄，最後修改 ${when(db.meta.updatedAt)}`;
-  const note = "「用雲端的」會先把這台的資料另存一份備份；「用這台的」會取代雲端，被取代的內容可以從試算表的「檔案 → 版本記錄」找回。";
+  // 這台有沒有雲端沒有的修改（第一次連結一律當成有）：沒有的話，「用雲端的」不會另存備份（見 cloudTakeCloud）
+  const mine = !cloud || cloud.dirty;
+  const note = (mine ? "「用雲端的」會先把這台的資料另存一份備份；"
+      : "「用雲端的」會取代這台，這台目前的內容跟上次同步時一樣，可以從試算表的「檔案 → 版本記錄」找回；")
+    + "「用這台的」會取代雲端，被取代的內容可以從試算表的「檔案 → 版本記錄」找回。";
   const text = {
     first: ["這個 Google 帳號的雲端硬碟已經有一份存檔，跟這台的資料不一樣。要用哪一份？", cloudLine, localLine, note],
-    conflict: ["上次同步之後，雲端的試算表被別的裝置或手動改過，這台也有還沒上傳的修改。要用哪一份？", cloudLine, localLine, note],
+    conflict: ["上次同步之後，雲端的試算表被別的裝置或手動改過" + (mine ? "，這台也有還沒上傳的修改" : "") + "。要用哪一份？", cloudLine, localLine, note],
     unreadable: ["這台原本的資料讀不出來，可以改用雲端的存檔。", cloudLine, backupAdvice()],
-    corrupt: [`雲端的試算表格式不對（${r.problem}），不能拿來用。要用這台的資料重新寫入嗎？`, localLine,
+    // 列出雲端還有幾筆：只看到這台的筆數，會以為雲端沒東西，就用示範資料蓋掉
+    corrupt: [`雲端的試算表格式不對（${r.problem}），不能拿來用。要用這台的資料重新寫入嗎？`,
+      `雲端：試算表裡還有 ${c.sessions.length} 筆記錄，重新寫入會取代它們`, localLine,
       "也可以先按「先不要」，到試算表的「檔案 → 版本記錄」還原成之前的版本。"]
   }[kind];
-  document.getElementById("cloudAskTitle").textContent =
-    {first: "雲端已經有一份存檔", conflict: "雲端和這台都改過", unreadable: "要改用雲端的存檔嗎？", corrupt: "雲端的試算表格式不對"}[kind];
+  document.getElementById("cloudAskTitle").textContent = {first: "雲端已經有一份存檔",
+    conflict: mine ? "雲端和這台都改過" : "雲端被改過", unreadable: "要改用雲端的存檔嗎？", corrupt: "雲端的試算表格式不對"}[kind];
   const box = document.getElementById("cloudAskText");
   box.textContent = "";
   for(const t of again ? ["雲端剛剛又被改過，下面是最新的內容，請再選一次。", ...text] : text){
