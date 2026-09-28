@@ -2195,10 +2195,13 @@ document.getElementById("btnCloudBackup").addEventListener("click", () => {
 document.getElementById("btnCloudUnlink").addEventListener("click", () => {
   if(cloudBusy) return;
   if(!confirm("中斷連結？雲端的試算表會保留，之後再連結可以找回。")) return;
-  if(cloudToken && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(cloudToken.token, () => {});
+  // 撤銷一定要用還有效的權杖（Google 的規定）。過期了就撤銷不了，請使用者自己到 Google 帳戶移除
+  const revoke = cloudTokenOk() && window.google && google.accounts && google.accounts.oauth2;
+  if(revoke) google.accounts.oauth2.revoke(cloudToken.token, () => {});
   cloudToken = null; cloud = null; cloudSave(); clearTimeout(cloudTimer);
   cloudRender();
-  cloudStatus("已中斷連結。雲端的試算表還在，之後再連結可以找回");
+  cloudStatus("已中斷連結。雲端的試算表還在，之後再連結可以找回" + (revoke ? ""
+    : "。這次沒有撤銷 Google 的存取權限，要撤銷請到 Google 帳戶的「第三方應用程式和服務」移除"));
 });
 
 /* ---------- 頁籤 ---------- */
