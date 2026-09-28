@@ -95,6 +95,25 @@ Claude Code 在本機有 `review-merge` skill，會自動跑完第 3～5 步。�
 - 按鍵用 `webContents.sendInputEvent`，例如 Ctrl+S。
 - 要模擬「打字後不離開輸入框」，要用 `sendInputEvent({type:"char"})` 真的打字。用程式直接設定 `value` 的話，離開時不會觸發 change 事件。
 
+### Google 試算表同步
+
+- **用模擬的 Google 測試**：
+  1. `node tools/make-cloud-test.js` 產生 `_cloud_test.html`。
+     - 這是 `index.html` 加上 `tools/cloud-mock.js`：假的登入元件和 Drive、Sheets API，並指定一個測試用的用戶端 ID。
+     - 這個檔案已列在 `.gitignore`，用完刪掉。
+  2. 模擬的雲端資料放在**外層頁面**的 `window.__cloudStore`。在預覽頁裡用 iframe 開 `_cloud_test.html`，換 iframe 時雲端資料還在。
+  3. 要模擬「換一台裝置」：先存下這台的 `grind-log/v1*` localStorage，換成另一組，再開新的 iframe。
+  4. `__cloudStore` 可以控制的測試情境：
+     - `failNext`（正規表示式）：下一個符合的請求回傳 500。
+     - `expireAuth`：下一個請求回傳 401。
+     - `denyToken`：登入視窗被關掉。
+     - 在 `files[id].sheets[].cells` 直接改內容：模擬使用者在試算表裡手動修改。
+  5. `db`、`cloud`、`cloudBusy` 是用 `let` 宣告的頂層變數，不在 `window` 上，要用 `iframe.contentWindow.eval("db")` 取得。
+- **用真的 Google 帳號測試**：
+  - 只能由使用者自己在預覽視窗裡登入。**不要代替使用者輸入帳號密碼**。
+  - 預覽的 `http://localhost:5599` 要在 Google Cloud 用戶端的「已授權的 JavaScript 來源」裡。
+- **用戶端 ID** 寫在 `index.html` 的 `GOOGLE_CLIENT_ID`，是公開資訊；絕不要放用戶端密鑰。
+
 ### 模擬寫入失敗
 
 - 在 iframe 裡覆寫 `Storage.prototype.setItem`，讓特定 key 拋出 `QuotaExceededError`。

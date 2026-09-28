@@ -10,8 +10,11 @@
 
 - 「匯出 JSON」`#btnExport`、「匯出 CSV」`#btnCsv`、「匯入 JSON」`#btnImport`（搭配隱藏的 `#fileInput`）。
 - 「開啟檔案」`#btnOpenFile`、「儲存到檔案」`#btnSaveFile`：只有 Electron 版才顯示（`#nativeRow`）。
+- 「Google 試算表同步」區塊 `#cloudBox`：見 [cloud-sync.md](cloud-sync.md)。
 - 「還原示範資料」`#btnDemo`、「清空全部」`#btnReset`。
 - 訊息 `#ioMsg`。
+
+匯入、還原示範、清空之後會存檔；有連結 Google 試算表時，這些換掉整份資料的動作也會照同步規則上傳（上傳前一樣會先檢查雲端有沒有被別台改過）。
 
 ## 行為規則
 

@@ -10,9 +10,10 @@
 | `package.json` | Electron 啟動設定（`npm start`） |
 | `privacy.html` | 隱私權政策（靜態頁）。Google OAuth 同意畫面的「隱私權政策網址」指向線上版的這一頁 |
 | `docs/` | 開發文件 |
+| `tools/` | 開發用工具：模擬 Google API 的測試頁產生器（`make-cloud-test.js`、`cloud-mock.js`） |
 | `CLAUDE.md` | 給 Claude Code 的開發指引 |
 
-沒有任何建置步驟或第三方前端套件。
+沒有任何建置步驟或第三方前端套件。唯一的外部程式是 Google 登入元件（`https://accounts.google.com/gsi/client`）：只有啟用 Google 試算表同步、而且使用者按了連結或已經連結過時才載入。
 
 ## 部署
 
@@ -75,15 +76,16 @@ header.top（#docTitle、#saveState）
 | 人員／等級編輯 | 行內編輯與刪除事件、`lvMsg`、`lvLabel`、新增人員、新增等級 |
 | 檔案 | `resumeSaving`、`applyLoaded`、`NOT_SAVED*`、`scrollRO`、`syncLoadBanner`、「下載原始內容」`#btnDownloadRaw` 的事件、`resetEditUI`、`ioMsg`、`download`、`stamp`、`csvCell`、`backupAdvice`、`confirmReplaceUnreadable`，以及匯出、匯入、還原示範、清空的事件 |
 | Electron | `if(window.grindLogNative){…}`：開檔、存檔、選單 |
+| Google 試算表同步 | `GOOGLE_CLIENT_ID`、`cloudEnabled`、`cloud`（同步狀態）、`toSheets`／`fromSheets`／`sheetHash`、`cloudLoadGis`／`cloudGetToken`、`cloudApi` 與各 API 函式、`cloudSync`／`cloudLink`／`cloudStep`／`cloudPutLocal`／`cloudTakeCloud`／`cloudAsk`、`cloudMarkDirty`、`cloudInit`，見 [features/cloud-sync.md](features/cloud-sync.md) |
 | 頁籤 | `applyTab` 與鍵盤、點擊事件 |
 | 每日進度 | `addDays`、`normDate`、`dayRow`、`dailyRows`、`addCumulative`、`segHtml`、`dayRowHtml`、`renderDaily` 與分頁事件 |
-| 開機 | 表單日期預設今天 → `applyTab()` → `render()` → `syncLoadBanner()` |
+| 開機 | 表單日期預設今天 → `applyTab()` → `render()` → `syncLoadBanner()` → `cloudInit()` |
 
 ## 資料流
 
 ```
 開機：   localStorage ─load()→ normalize() ─→ db ─render()→ 畫面
-操作：   事件 → 改 db → persist()（寫 localStorage）→ render()（整頁重畫）
+操作：   事件 → 改 db → persist()（寫 localStorage，有連結試算表時 cloudMarkDirty() 排定上傳）→ render()（整頁重畫）
 換資料： 匯入／開檔 → normalize(d, issues) → applyLoaded(d) → render() 試畫 → resumeSaving()
          還原示範／清空 → 換 db → resumeSaving() → render()
 ```
@@ -113,6 +115,10 @@ header.top（#docTitle、#saveState）
 | `grind-log/v1` | 整份資料的 JSON |
 | `grind-log/v1:ui` | UI 偏好：`{pageSize, tab, dayPageSize}` |
 | `grind-log/v1:unreadable`、`grind-log/v1:unreadable-<時間戳>` | 讀不出來的原文備份，見 [features/storage-recovery.md](features/storage-recovery.md) |
+| `grind-log/v1:sync` | Google 試算表同步狀態：`{fileId, hash, dirty}`，見 [features/cloud-sync.md](features/cloud-sync.md) |
+| `grind-log/v1:local-backup` | 「用雲端的」取代這台之前另存的資料 `{savedAt, data}`，只留最新一份 |
+
+Google 的存取權杖只放在記憶體，不寫進 localStorage。
 
 - 第一次開啟（沒有 `grind-log/v1`）時顯示示範資料。要等使用者第一次操作，才會寫進 localStorage。
 - 瀏覽器不允許使用 localStorage 時，也顯示示範資料；這時所有修改都存不下來，狀態列會說明。

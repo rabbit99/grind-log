@@ -11,3 +11,4 @@ dist/
 # 測試時跟 main 對照用的暫存副本（見 docs/development.md）
 _main_compare.html
 _prev_compare.html
+_cloud_test.html

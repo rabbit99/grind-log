@@ -36,6 +36,11 @@ Grind Log 練功記錄：記錄練功時段，把「每時段獲得幾 %」換�
 - **901px 以上的桌面版外觀**、**資料格式**、**可能刪掉使用者資料的行為**：要改之前先問使用者。
 - **表單的人員選單不能悄悄換人**，見 [docs/features/session-form.md](docs/features/session-form.md)。
 - **效率與費用的分母是計費時數**（`billHours`），不是時段長度。
+- **Google 試算表同步**（見 [docs/features/cloud-sync.md](docs/features/cloud-sync.md)）：
+  - 讀不出原本資料（`loadProblem`）的期間絕不上傳。
+  - 雲端和這台都改過時，一定要讓使用者選，不能悄悄覆蓋任何一邊。
+  - 只要求 `drive.file` 權限；存取權杖只放記憶體；程式裡只放用戶端 ID，絕不放用戶端密鑰。
+  - 測試用模擬的 Google API；真的登入只能由使用者自己操作。
 
 ## 工作流程
 
