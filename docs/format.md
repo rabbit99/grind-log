@@ -104,17 +104,18 @@
 所有指標都不儲存，由原始值即時計算：
 
 ```
-hours          = end >= start ? end - start : end + 24 - start
-requiredUnits  = levels[level].required
-hours          = end − start                  ← 時段長度（跨午夜 +24）
+hours          = end >= start ? end - start : end + 24 - start   ← 時段長度（跨午夜 +24）
 billHours      = billableHours ?? hours       ← 計費／有效時數
+requiredUnits  = levels 裡第一列 level 相同的 required
 gainedUnits    = gainedPct / 100 × requiredUnits
-unitsPerHour   = gainedUnits / hours          ← 唯一可跨階段比較的效率指標
-pctPerHour     = gainedPct / hours            ← 僅限同階段內比較
-cost           = billable ? hours × hourlyRate : 0
-costPerPct     = cost / gainedPct
+unitsPerHour   = gainedUnits / billHours      ← 唯一可跨階段比較的效率指標
+pctPerHour     = gainedPct / billHours        ← 僅限同階段內比較
+cost           = billable ? billHours × hourlyRate : 0
 costPerMUnit   = cost / (gainedUnits / 1e6)   ← 可跨階段比較的成本指標
 ```
+
+效率和費用的分母都是 `billHours`，理由見上一節。
+實作細節，例如怪資料怎麼處理、分母是 0 時怎麼顯示，見 [calculations.md](calculations.md)。
 
 ## 讀入時的整理
 

@@ -60,7 +60,7 @@ function buildMenu() {
       submenu: [
         {
           label: "資料格式說明",
-          click: () => shell.openPath(path.join(__dirname, "FORMAT.md")),
+          click: () => shell.openPath(path.join(__dirname, "docs", "format.md")),
         },
       ],
     },
