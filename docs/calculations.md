@@ -105,6 +105,65 @@
 - 計費時數和時段不同時照樣畫完整時段，因為不知道休息發生在哪個時間點。
 - 停用的記錄畫成淡色。起訖不是數字時不畫。
 
+## 練功計畫
+
+功能行為見 [features/plan.md](features/plan.md)，資料格式見 [format.md](format.md#plan練功計畫)。
+**計畫值是依輸入條件估算的目標，不是實際獲得的經驗**；所有數字都即時算，不存。
+
+### 所需經驗
+
+- `R(L)` = `levelInfo(L)` 那一列的 `required`，要是**有限的正數**才算有；沒有那一列、是 0、負數、`NaN` 都算「缺」。
+- 起點 `(a, pa)`、目標 `(b, pb)`。必要的 `R`：`a`～`b−1` 每一級，以及 `b`（**只有 `pb > 0` 時**才需要）。有任何一個缺就不產生計畫，訊息指名缺哪一級（缺很多級時列前 3 個再加「…共 N 級」）。
+- 總經驗 `total`：
+  - `a < b`：`Σ_{L=a}^{b−1} R(L) − pa/100 × R(a) + pb/100 × R(b)`（`pb = 0` 時最後一項是 0，不查 `R(b)`）。
+  - `a = b`（要求 `pb > pa`）：`(pb − pa)/100 × R(a)`。
+  - `total` 必須 > 0。
+
+### 展開時段與分配
+
+1. 從 `start` 到 `end`（含）逐日，**星期**用跟 `weekday()` 相同的 UTC 算法（避免時區），對 `weekly` 的每一組：星期有勾就產生一個時段 `{date, start, end, hours = end − start}`。
+2. 依日期、再依開始時間排序。時段鍵 `key = date + "|" + String(start) + "|" + String(end)`，同一個鍵不重複。
+3. `totalHours = Σ hours`；`totalHours = 0` 不產生計畫；時段總數 > 1000 不產生計畫。
+4. **需要時速** `needRate = total / totalHours`（exp/h）。
+5. 第 `i` 個時段：`plannedExp = needRate × hours`；累計經驗 `cum_i = needRate × (前 i 個時段的 hours 加總)`。**最後一個時段的累計直接取 `total`**，位置直接取目標，避免浮點誤差讓最後一列差一點點。
+
+### 位置 `pos(E)`（`0 ≤ E ≤ total` 的累計經驗 → 等級與 %）
+
+```
+rem   = pa/100 × R(a) + E
+level = a
+while level < b 且 rem ≥ R(level) − 1e-6:  rem −= R(level); level += 1
+pct   = (level = b 且 R(b) 缺) ? 0 : rem / R(level) × 100
+```
+
+- `level` 不會超過 `b`；到達 `(b, pb)` 時 `level = b`。
+- 時段的「目標位置」是 `pos(cum_i)`；「本時段起點」是 `pos(cum_{i−1})`（第一個時段是 `(a, pa)`）。起點與終點等級不同時，這個時段「升級」。
+- 本時段目標 %：同級時 `pct_i − pct_{i−1}`；跨級時不給 %，只給經驗與「升到 Lv X」（跟「跨級的 % 不相加」同一原則，見每日進度頁）。
+
+### 可行性（只在 `rate` 是有限正數時）
+
+- 預估產出 `rate × totalHours`；達成度 `= 預估產出 / total`。
+- **預估達成日**：第一個使 `rate × (累計 hours) ≥ total − 1e-6` 的時段的日期。計畫期間內找不到時，用同一組 `weekly` 從 `end` 次日往後再展開，最多找到 `start` 之後 3660 天；仍找不到就是「—」。
+  - 達成日比 `end` 早的天數 `= end − 達成日`（用日期差，不是時段數）。
+- 要準時達成的時速提高比例 `= needRate / rate − 1`。
+
+### 歷史時速 `planHistRate(workerId)`
+
+- 取**啟用**的記錄（`isOn`）；`workerId` 是空字串時不限人員，否則 `s.workerId === workerId`。
+- 只計算 `derive(s).required` 是有限正數、而且 `billHours > 0` 的記錄。**等級表沒有經驗的記錄不能算進時數**，否則它的時數被算進去、經驗卻是 0，時速會被低估。
+- `歷史時速 = Σ units / Σ billHours`（分母是**計費時數**，不是時段長度）；筆數 `N`＝被計入的記錄數，`M`＝Σ billHours。
+- `N = 0`、或 Σ units ≤ 0 時是「無資料」。
+
+### 進度
+
+時段狀態依本機現在時刻，見 [features/plan.md](features/plan.md#時段狀態用本機時間)。
+
+- `doneExp` = 標記為 `done` 的時段的 `plannedExp` 加總；**計畫經驗完成度** `= doneExp / total`。
+- `shouldExp` = 已結束（狀態為「已結束」）的時段的 `plannedExp` 加總；**應有進度** `= shouldExp / total`。
+- **落後**：`shouldExp − doneExp > 1e-6` 時為落後。落後時段數 = 已結束但標記不是 `done` 的時段數（待填與沒練都算）。
+- **補救時速** `= max(0, total − doneExp) / remainingHours`，`remainingHours` 是狀態為「未開始」或「進行中」的時段的 hours 加總；`remainingHours = 0` 時沒有補救時速（計畫期間已結束）。
+- 這裡的 `plannedExp` 是計畫值，**不是實際獲得**；實際進度看經驗條與每日進度頁。
+
 ## 格式化
 
 | 函式 | 用途 |
