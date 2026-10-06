@@ -41,7 +41,7 @@
 | loadbanner | 讀不出資料時的紅框提示 |
 | 頁籤 | `.pagetabs` |
 | 每日進度頁 | `.dlegend`、`#tblDaily`、時間軸 `.track`／`.dseg`；900px 以下改成卡片 |
-| 練功計畫頁 | 全部限定在 `#pagePlan` 底下（`.plform`、`.plrow`、`.plslot`、`.pldays`、`.pltimes`、`.plhint`、`.plok`／`.plno`、`.pltag`、`.plmark`、`.plbar`、排程表 `#tblPlan`），不影響其他兩頁；窄螢幕規則（含 320～360px 的頁籤）在 `@media(max-width:900px)` |
+| 練功計畫頁 | 全部限定在 `#pagePlan` 底下（`.plform`、`.plrow`、`.plslot`、`.pldays`、`.pltimes`、`.plhint`、`.plok`／`.plno`、`.pltag`、`.plmark`、`.plbar`、排程表 `#tblPlan`），不影響其他兩頁；窄螢幕規則在 `@media(max-width:900px)`；另有獨立的 `@media(max-width:360px)` 縮小頁籤內距（全域規則，舊兩頁的頁籤在 ≤360px 內距也會縮小，是為了三個頁籤維持一行的刻意取捨，見 layout.md） |
 
 ### HTML
 
