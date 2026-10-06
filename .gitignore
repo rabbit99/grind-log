@@ -4,7 +4,8 @@ grind-log-*.json
 sheet-*.txt
 
 # 本機開發設定
-.claude/
+.claude/*
+!.claude/skills/
 node_modules/
 dist/
 

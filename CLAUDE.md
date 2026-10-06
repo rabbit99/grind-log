@@ -48,7 +48,7 @@ Grind Log 練功記錄：記錄練功時段，把「每時段獲得幾 %」換�
 
 - 每個修改開新分支，例如 `fix/…`、`feat/…`、`docs/…`；`main` 在合併前不動。
 - 合併前一定要跑獨立審查。
-  - 使用者說「跑審查，沒問題就合併」時，用本機的 `review-merge` skill。
+  - 使用者說「跑審查，沒問題就合併」時，用 `review-merge` skill（`.claude/skills/`，已入版控）。審查者是 ai-company 的茶茶（`reviewer-chacha`）；叫不到茶茶就停下來問，不退回別的審查者。
   - 使用者已授權這個流程自動進行：審查、依結果修正、合併、推送、確認部署、刪分支。
   - 遇到上面「要先問使用者」的取捨時才停下來問。
 - Commit 作者：`git -c user.email="vvbest2012@gmail.com" -c user.name="rabbit99" commit …`。

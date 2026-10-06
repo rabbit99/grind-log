@@ -15,7 +15,9 @@
    - 等 `pages build and deployment` 跑完，到線上版確認有這次的改動。
 5. **合併後刪掉本機分支**。
 
-Claude Code 在本機有 `review-merge` skill，會自動跑完第 3～5 步。它放在 `.claude/skills/`，沒有納入版控。
+Claude Code 有 `review-merge` skill，會自動跑完第 3～5 步。它放在 `.claude/skills/`，已納入版控（`.gitignore` 只放行 `.claude/skills/`，其他 `.claude/` 內容仍不入庫）。
+
+審查者是 ai-company 的茶茶（`reviewer-chacha`），不再用 `general-purpose`。茶茶沒有瀏覽器，瀏覽器實測由主對話做、結果交給茶茶核對；細節見 skill 的第 2 節。
 
 ### 什麼時候要先問使用者
 
