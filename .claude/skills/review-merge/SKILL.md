@@ -87,6 +87,14 @@ git merge --ff-only <branch>
 git push origin main
 ```
 
+`git push`／`git fetch` 被認證擋住（`could not read Password for 'https://rabbit99@github.com'`）時，不要停下，改用 `gh` 的 rabbit99 token 當一次性憑證（不要 `gh auth switch`，不要印出 token）：
+
+```bash
+H='!f(){ echo username=rabbit99; echo password=$(gh auth token --user rabbit99); }; f'
+git -c credential.helper= -c credential.helper="$H" push origin main
+```
+（第 1 節的 `git fetch origin` 同樣加 `-c credential.helper= -c credential.helper="$H"`。）
+
 確認部署：
 
 1. 用 `gh run list --repo rabbit99/grind-log` 找到對應 commit 的 `pages build and deployment` run。

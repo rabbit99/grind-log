@@ -51,6 +51,12 @@ Grind Log 練功記錄：記錄練功時段，把「每時段獲得幾 %」換�
   - 使用者說「跑審查，沒問題就合併」時，用 `review-merge` skill（`.claude/skills/`，已入版控）。審查者是 ai-company 的茶茶（`reviewer-chacha`）；叫不到茶茶就停下來問，不退回別的審查者。
   - 使用者已授權這個流程自動進行：審查、依結果修正、合併、推送、確認部署、刪分支。
   - 遇到上面「要先問使用者」的取捨時才停下來問。
+- **`git push`／`fetch` 報 `could not read Password for 'https://rabbit99@github.com'`**（非互動環境，常見）：用 `gh` 裡 rabbit99 的 token 當一次性憑證，**不要 `gh auth switch`**、不要印出或寫入 token：
+  ```bash
+  H='!f(){ echo username=rabbit99; echo password=$(gh auth token --user rabbit99); }; f'
+  git -c credential.helper= -c credential.helper="$H" push origin <分支>
+  ```
+  能推不代表可以推 `main`：推 main＝上線，仍要使用者說「跑審查，沒問題就合併」。
 - Commit 作者：`git -c user.email="vvbest2012@gmail.com" -c user.name="rabbit99" commit …`。
 - 詳細流程、編碼規範、測試方法見 [docs/development.md](docs/development.md)。
 
