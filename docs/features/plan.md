@@ -229,7 +229,9 @@
 
 已實作（`index.html`，S3b／S3c）：`#pagePlan`／`#tabPlan`、`normPlan()`（函式宣告，開機載入會用到）、`planCheck()`、`planSlots()`、`planSpanToEnd()`（期限換算）、`planMissingLevels()`／`planMissingText()`、`planLevelMap()`、`planCalc()`、`planPos()`（規格裡的 `pos(E)`，迭代上限＝等級表列數＋1）、`planDelayDate()`、`planHistRate()`、`planFromRec()`／`heroLevel()`、`planReplaceWarning()`／`planBrief()`／`planMarkCount()`、`renderPlan()`／`planRenderBody()`／`planSummaryHtml()`／`planRowHtml()`、分頁 `planPages()`／`planTodayPage()`／`planPageRange()`、表單 `planFillForm()`／`planFormSync()`／`planSave()`／`planDelete()`、`planPage`／`planPageSize`（UI 偏好；`planPage` ＝ 0 代表「尚未決定，翻到包含今天的那頁」）；改動 `confirmReplaceUnreadable()`、`#btnDemo`／`#btnReset` 的確認框、`cloudAsk()`、`normalize()`。
 
-尚未實作（S3d）：`planState()`（時段狀態）、完成標記按鈕與寫入、進度／落後／補救時速（摘要第 4、5 項）、`planTick`（計時器）。排程表的「狀態」欄目前只放「—」。
+S3d 已實作：`planNow()`（現在時刻的唯一來源，測試時替換它）、`planSlotTimes()`、`planState()`（`upcoming`／`live`／`ended`）、`planStates()`（含「下一個」）、`planSigOf()`（狀態簽章）、`planMarksOf()`／`planMarkOf()`、`planProgress()`（完成度、應有進度、待填、落後、補救時速）、`planProgressHtml()`、`planMark()`（寫入標記）、`planKeepFocus()`（重畫前後還原焦點與左右捲位置）、`planTickStart()`／`planTick()`（計時器，只有一個 interval，每 30 秒與 `visibilitychange` 回前景時檢查）、`planLast`（最近一次畫出來的計畫，計時器用它比對簽章）。排程表的狀態欄、摘要第 4、5 項都已完成；`localToday()` 也改成取 `planNow()`。
+
+整個功能在整合實測（S3e）之前，上面的「狀態：規格（尚未實作）」先保留。
 
 **TDZ**：`normPlan()` 在開機（`let db = load()`）時就會執行，只能用函式宣告、自己的區域變數，以及宣告在那一行之前的頂層變數（例如 `WEEK`）；**不能用之後才宣告的 `const`**（例如新增的 `PLAN_MAX`），常數要寫在函式裡面。它對形狀不對的輸入（`from` 不是物件、`weekly` 不是陣列…）要防禦，**不拋例外**。
 

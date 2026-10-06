@@ -109,6 +109,14 @@
   - 選「用這台的」：選完就算連結，並標記成還沒上傳；上傳失敗時，下次同步會再上傳。
 - 連結期間（上傳還沒完成時）又修改了資料，會標記成還沒上傳，接著自動再上傳一次。
 
+### 練功計畫（`plan`）隨「其他欄位」同步
+
+- `db.plan` 是 `db` 頂層的未知欄位（見 [plan.md](plan.md)、[format.md](../format.md#plan練功計畫)），`toSheets()` 把它放進「設定」工作表的「其他欄位（JSON）」那一列，`fromSheets()` 讀回來；**試算表的欄位、工作表結構都沒有改**。舊試算表（沒有 `plan`）照常讀，`sheetProblem()` 不會把有 `plan` 的試算表判成壞掉。
+- **容量**：這一格上限 50,000 字元。計畫的時段最多 1000 個、`marks` 最多 1000 個鍵、時間限定 15 分鐘的倍數，全部標記約 34,000 字元，仍在上限內；超過上限的計畫被 `planCheck()` 判為壞掉（不自動刪），計畫頁會提醒同步可能失敗。
+- **標記會讓這台變成「有修改」**：標記走 `persist()`，所以會呼叫 `cloudMarkDirty()`；雙邊都改過時照常進衝突對話框，不會悄悄覆蓋。
+- **`cloudAsk()` 的計畫概況**：第一次連結與衝突兩種對話框，在「雲端」「這台」兩行底下各加一行「練功計畫：有（N 個已標記的時段）」或「練功計畫：沒有」。雲端那行的 `plan` 取自尚未 normalize 的 `fromSheets()` 結果，先用 `isPlainObj` 判斷 `plan` 與 `marks` 是物件才數標記，壞資料不會讓對話框拋例外；讀不出這台資料時不顯示「這台」那行。
+- **`cloudTakeCloud()`（用雲端的）不另外確認**：維持原本的行為。
+
 ### 對話框的選擇
 
 - **選完之後會再讀一次雲端**：對話框可能開了很久，這段期間雲端又被改過的話，對話框會重新出現，第一行用紅字寫「雲端剛剛又被改過」，顯示最新的內容讓使用者再選一次。避免「用這台的」蓋掉使用者沒看過的修改。
@@ -161,6 +169,7 @@
 - 格式轉換與檢查：`toSheets()`、`fromSheets()`、`sheetHash()`、`sheetProblem()`。
 - 同步流程：`cloudSync()`、`cloudLink()`、`cloudStep()`、`cloudChoose()`、`cloudAsk()`、`cloudTakeCloud()`、`cloudPutLocal()`、`cloudMarkDirty()`。
 - 在 `persist()` 成功後會呼叫 `cloudMarkDirty()`；換掉整份資料的確認框用 `cloudReplaceWarning()`。
+- 練功計畫：`cloudAsk()` 的概況行用 `planBrief()`；本機換資料的確認用 `planReplaceWarning()`，與 `cloudReplaceWarning()` 並列。
 
 ## 設計決策
 

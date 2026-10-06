@@ -76,7 +76,9 @@
   - 平常：「建議先匯出 JSON 備份」。
   - 讀不出原本資料時：提醒先按「下載原始內容」。
   - 已連結 Google 試算表時：加上「確定後雲端的存檔也會被換掉」，見 [cloud-sync.md](cloud-sync.md)。
-- 平常的匯入不確認，只有讀不出原本資料、或已連結 Google 試算表時才確認（`confirmReplaceUnreadable()`）。
+- 平常的匯入不確認，只有讀不出原本資料、已連結 Google 試算表、或**目前有練功計畫**時才確認（`confirmReplaceUnreadable()`）。
+- **有練功計畫時**（`db.plan` 是物件），匯入、Electron 開啟檔案、還原示範資料、清空全部的確認框都會附上 `planReplaceWarning()`：「目前的練功計畫（N 個已標記的時段）會被換掉；新的資料裡沒有計畫的話，計畫會消失。」沒有計畫時完全不受影響，行為跟以前逐項相同（尤其匯入平常不問）。與已連結雲端時的警告並列，不互相取代。
+- 匯入時，檔案裡的 `plan` 不是物件會被拿掉、`marks` 存在但不是物件會換成 `{}`，兩者都會列在「自動整理」訊息裡（紅字）；其他不合規則的計畫內容保留，由計畫頁顯示原因。
 
 ### Electron：開啟檔案、儲存到檔案
 
@@ -98,7 +100,7 @@
 
 ## 相關程式
 
-`#btnExport`、`#btnCsv`、`#fileInput` 的事件；`csvCell()`、`download()`、`stamp()`、`normalize()`、`applyLoaded()`、`resumeSaving()`、`backupAdvice()`、`confirmReplaceUnreadable()`；Electron 區塊 `if(window.grindLogNative){…}`；`main.js` 的 `file:save`、`file:open`。
+`#btnExport`、`#btnCsv`、`#fileInput` 的事件；`csvCell()`、`download()`、`stamp()`、`normalize()`、`applyLoaded()`、`resumeSaving()`、`backupAdvice()`、`confirmReplaceUnreadable()`、`planReplaceWarning()`；Electron 區塊 `if(window.grindLogNative){…}`；`main.js` 的 `file:save`、`file:open`。
 
 ## 修改時要檢查
 

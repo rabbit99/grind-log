@@ -84,7 +84,7 @@ header.top（#docTitle、#saveState）
 | Google 試算表同步 | `GOOGLE_CLIENT_ID`、`cloudEnabled`、`cloud`（同步狀態）、`toSheets`／`fromSheets`／`sheetHash`／`sheetProblem`、`cloudLoadGis`／`cloudGetToken`、`cloudApi` 與各 API 函式、`cloudSync`／`cloudLink`／`cloudStep`／`cloudChoose`／`cloudPutLocal`／`cloudTakeCloud`／`cloudAsk`、`cloudMarkDirty`、`cloudReplaceWarning`、`cloudInit`，見 [features/cloud-sync.md](features/cloud-sync.md) |
 | 頁籤 | `applyTab` 與鍵盤、點擊事件（三個頁籤，鍵盤左右／Home／End 循環） |
 | 每日進度 | `addDays`、`normDate`、`dayRow`、`dailyRows`、`addCumulative`、`segHtml`、`dayRowHtml`、`renderDaily` 與分頁事件 |
-| 練功計畫 | `normPlan`（在資料整理區，開機時由 `normalize` 呼叫）、`utcMs`／`planDays`／`planSpanToEnd`（期限換算）、`planKeyOk`、`planSlots`、`planCheck`、`planMissingLevels`／`planMissingText`、`planMarkCount`、`planBrief`、`planReplaceWarning`、`planHistRate`、`localToday`、`planFromRec`；表單：`planMsg`、`planSlotAdd`／`planSlotSync`、`planSyncWorkerSelect`、`planRateInfo`、`planEndShow`、`planFillForm`／`planFormSync`、`planSave`、`planDelete`；`renderPlan`（自己有 try／catch）與表單事件。另有 `heroLevel`（經驗條與「從練功記錄帶入」共用）。S3c 加入：`planLevelMap`、`planPos`、`planDelayDate`、`planCalc`、`planPctTxt`／`planHm`／`planMD`、`planPages`／`planTodayPage`／`planPageRange`、`planRowHtml`、`planSummaryHtml`、`planRenderBody`，以及 `#planSize`／`#planLinks`／`#planToday` 的事件。見 [features/plan.md](features/plan.md)。**時段狀態、完成標記、進度與落後、計時器（S3d）尚未實作** |
+| 練功計畫 | `normPlan`（在資料整理區，開機時由 `normalize` 呼叫）、`utcMs`／`planDays`／`planSpanToEnd`（期限換算）、`planKeyOk`、`planSlots`、`planCheck`、`planMissingLevels`／`planMissingText`、`planMarkCount`、`planBrief`、`planReplaceWarning`、`planHistRate`、`localToday`、`planFromRec`；表單：`planMsg`、`planSlotAdd`／`planSlotSync`、`planSyncWorkerSelect`、`planRateInfo`、`planEndShow`、`planFillForm`／`planFormSync`、`planSave`、`planDelete`；`renderPlan`（自己有 try／catch）與表單事件。另有 `heroLevel`（經驗條與「從練功記錄帶入」共用）。S3c 加入：`planLevelMap`、`planPos`、`planDelayDate`、`planCalc`、`planPctTxt`／`planHm`／`planMD`、`planPages`／`planTodayPage`／`planPageRange`、`planRowHtml`、`planSummaryHtml`、`planRenderBody`，以及 `#planSize`／`#planLinks`／`#planToday` 的事件。見 [features/plan.md](features/plan.md)。S3d 加入：`planNow`、`planSlotTimes`、`planState`／`planStates`／`planSigOf`、`planMarksOf`／`planMarkOf`、`planProgress`／`planProgressHtml`、`planMark`、`planKeepFocus`、`planTickStart`／`planTick`（計時器）、`planLast`、`planTimer`，以及 `#planTableBox` 的點擊事件（完成／沒練／改）與 `visibilitychange`。**現在時刻一律從 `planNow()` 取**（`localToday()` 也是），測試時只要替換它 |
 | 開機 | 表單日期預設今天 → `applyTab()` → `render()` → `syncLoadBanner()` → `cloudInit()` |
 
 ## 資料流
@@ -114,6 +114,7 @@ header.top（#docTitle、#saveState）
 | `tab` | 目前頁籤：`"main"`、`"daily"` 或 `"plan"` |
 | `dayPage`、`dayPageSize` | 每日進度頁的目前頁與每頁天數 |
 | `planPage`、`planPageSize` | 練功計畫頁的目前頁與每頁天數（7／14／30，預設 14）。`planPage` ＝ 0 代表尚未決定：`renderPlan` 會翻到包含今天（本地日期）的那一頁；進頁籤、更新或刪除計畫、按「回到今天」時重設成 0 |
+| `planTimer`、`planLast` | 練功計畫頁的計時器（`setInterval`，整個頁面只有一個，30 秒一次）與最近一次畫出來的 `{ref, calc, sig}`。`planTick()` 只在 `tab === "plan"` 而且頁面看得見時做事，狀態簽章（所有時段的狀態＋下一個＋今天日期）沒變就什麼都不做，**絕不呼叫 `persist()`** |
 | `planRateSrc`、`planFormFor`、`planFormDb` | 計畫表單的暫存：目前預估時速的來源（`history`／`manual`）、表單上次是用哪份計畫與哪份 `db` 填的（沒變就不重填，避免洗掉使用者正在輸入的內容） |
 
 ## localStorage

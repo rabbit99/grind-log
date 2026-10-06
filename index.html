@@ -347,6 +347,19 @@
   #pagePlan .pltag.up{background:var(--gold);color:#171200;font-weight:600}
   /* S3C-PLAN-20261006 排程表。S3c 的 #planTableBox 自己是 .scroll，不再另包一層 */
   #tblPlan td.p-goal,#tblPlan td.p-pos{white-space:nowrap}
+  /* S3D-PLAN-20261006 進行中的列：底色＋左邊框＋「進行中」文字標籤＋aria-current，不只靠顏色 */
+  #tblPlan tr.pllive{background:rgba(201,162,39,.14)}
+  #tblPlan tr.pllive td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+  #tblPlan td.p-state{white-space:normal}
+  #tblPlan td.p-state button{margin-left:6px}
+  #tblPlan td.p-state .pltag:first-child{margin-left:0}
+  #pagePlan .pltag.wait{border-color:var(--crimson);color:#E39A96}
+  #pagePlan .plmark{font-weight:600;white-space:nowrap}
+  #pagePlan .plmark.done{color:var(--jade)}
+  #pagePlan .plmark.missed{color:#E39A96}
+  #pagePlan .plbar{position:relative;height:14px;background:#0E1218;border:1px solid var(--rule);border-radius:2px;margin:6px 0 4px}
+  #pagePlan .plbar-fill{height:100%;background:var(--jade)}
+  #pagePlan .plbar-tick{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--gold)}
   @media(max-width:900px){
     /* 窄螢幕：每個時段一張卡片，比照每日進度頁 */
     #tblPlan thead{display:none}
@@ -356,6 +369,8 @@
     #tblPlan td.p-date{min-width:3.4em;font-weight:600}
     #tblPlan td.p-week{min-width:2.2em}
     #tblPlan td.p-state{margin-left:auto}
+    #tblPlan tr.pllive{box-shadow:inset 3px 0 0 var(--gold)}
+    #tblPlan tr.pllive td:first-child{box-shadow:none}
     #tblPlan td.p-hrs{color:var(--bone-dim)}
     #tblPlan td.p-hrs::after{content:" 小時"}
     #tblPlan td.p-goal,#tblPlan td.p-pos{flex:0 0 100%;font-size:12.5px}
@@ -2889,7 +2904,7 @@ function planHistRate(workerId){
 }
 /* 本地的今天（不是 UTC，見 tech-debt 第 12 項） */
 function localToday(){
-  const d = new Date();
+  const d = planNow();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 /* 從練功記錄帶入：目前等級與本級已累積，跟經驗條同一套（heroLevel、pctOf 依序加總）。沒有啟用記錄回傳 null */
@@ -3026,18 +3041,138 @@ function planPageRange(calc, page, size){
   const hi = planIso(utcMs(y, m, d) + (page * size - 1) * 864e5);
   return {lo, hi: hi > calc.end ? calc.end : hi};
 }
-function planRowHtml(r, today){
+/* ----- 時段狀態、完成標記、進度（S3D-PLAN-20261006）----- */
+/* 現在時刻只從這裡取，測試時替換這一個函式 */
+function planNow(){ return new Date(); }
+/* 時段的開始、結束時刻（本地時間，毫秒）。用 new Date(年, 月-1, 日, 時, 分) 建立，不用 new Date("YYYY-MM-DD")
+   （那是 UTC 午夜，在台灣差 8 小時）。時間是 15 分鐘的倍數，分鐘一定是整數；24 點會進位成隔天 0 點 */
+function planSlotTimes(s){
+  const [y, m, d] = s.date.split("-").map(Number);
+  const mk = v => { const h = Math.floor(v); return new Date(y, m - 1, d, h, Math.round((v - h) * 60)).getTime(); };
+  return {start: mk(s.start), end: mk(s.end)};
+}
+/* 時段狀態：upcoming（未開始）| live（進行中）| ended（已結束）。now 是 Date 或毫秒。
+   現在 < 開始 → 未開始；開始 ≤ 現在 < 結束 → 進行中；現在 ≥ 結束 → 已結束 */
+function planState(s, now){
+  const t = now instanceof Date ? now.getTime() : Number(now);
+  const x = planSlotTimes(s);
+  if(!(t >= x.start)) return "upcoming";
+  return t < x.end ? "live" : "ended";
+}
+/* 所有時段的狀態與「下一個」（第一個未開始的時段的位置，沒有是 -1） */
+function planStates(rows, now){
+  const st = rows.map(r => planState(r, now));
+  return {st, next: st.indexOf("upcoming")};
+}
+/* 狀態簽章：所有時段的狀態＋下一個是哪一個＋今天日期。簽章沒變就不用重畫 */
+function planSigOf(g, today){
+  return g.st.map(x => x === "live" ? "l" : x === "ended" ? "e" : "u").join("") + "|" + g.next + "|" + today;
+}
+function planMarksOf(p){ return isPlainObj(p) && isPlainObj(p.marks) ? p.marks : {}; }
+function planMarkOf(marks, key){ const v = marks[key]; return v === "done" || v === "missed" ? v : null; }
+/* 進度（calculations.md「進度」）：標記照存的值算，不看時段狀態。
+   doneExp＝done 時段的計畫經驗；shouldExp＝已結束時段的計畫經驗；落後＝已結束但不是 done 的時段（待填＋沒練）；
+   補救時速＝(總經驗−doneExp) ÷ 剩餘時數（未開始或進行中時段的時數），剩餘 0 時是 null */
+function planProgress(c, marks, st){
+  let doneN = 0, doneH = 0, doneExp = 0, shouldExp = 0, pending = 0, behindN = 0, behindExp = 0, remH = 0;
+  c.slots.forEach((r, i) => {
+    const mk = planMarkOf(marks, r.key);
+    if(mk === "done"){ doneN++; doneH += r.hours; doneExp += r.plannedExp; }
+    if(st[i] === "ended"){
+      shouldExp += r.plannedExp;
+      if(!mk) pending++;
+      if(mk !== "done"){ behindN++; behindExp += r.plannedExp; }
+    }else remH += r.hours;
+  });
+  return {doneN, count: c.slots.length, doneH, doneExp, donePct: doneExp / c.total * 100, shouldPct: shouldExp / c.total * 100,
+    pending, behindN, behindExp, remH, rescue: remH > 0 ? Math.max(0, c.total - doneExp) / remH : null};
+}
+/* 改 db.plan.marks：act 是 done／missed／clear。再按同一個狀態＝清除。走 persist()＋重畫計畫頁，不碰 sessions。
+   完成／沒練只能標在已結束的時段（已經有標記的可以改、清）。清除＝刪鍵 */
+function planMark(key, act){
+  const p = db.plan;
+  if(!isPlainObj(p) || !["done", "missed", "clear"].includes(act) || !planKeyOk(key)) return;
+  const slot = planSlots(p).find(s => s.key === key);
+  if(!slot) return;
+  if(p.marks === undefined) p.marks = {};
+  if(!isPlainObj(p.marks)) return;
+  const cur = planMarkOf(p.marks, key);
+  if(act === "clear" || cur === act) delete p.marks[key];
+  else{
+    if(!cur && planState(slot, planNow()) !== "ended") return;
+    p.marks[key] = act;
+  }
+  persist();
+  planKeepFocus(renderPlan);
+}
+/* 重畫前記下取得焦點的按鈕（時段鍵＋動作），重畫後還給同一顆；它不見了（標記後按鈕換了）就給同一列的第一顆。
+   捲動位置（表格容器的左右捲）也還原 */
+function planKeepFocus(fn){
+  const box = document.getElementById("planTableBox");
+  const a = document.activeElement;
+  const want = a && a.dataset && a.dataset.act && box.contains && box.contains(a) ? {key: a.dataset.key, act: a.dataset.act} : null;
+  const sl = box.scrollLeft;
+  fn();
+  box.scrollLeft = sl;
+  if(want){
+    const bs = [...box.querySelectorAll("button[data-act]")];
+    const hit = bs.find(b => b.dataset.key === want.key && b.dataset.act === want.act) || bs.find(b => b.dataset.key === want.key);
+    if(hit && hit.focus) hit.focus();
+  }
+}
+let planTimer = null;            // 計時器只有一個；planTickStart 保證不會疊加
+let planLast = null;             // 最近一次畫出來的 {ref: db.plan, calc, sig}，計時器用它比對，不用重算
+function planTickStart(){ if(planTimer === null) planTimer = setInterval(planTick, 30000); }
+/* 每 30 秒與回到前景時呼叫：只有在計畫頁而且頁面看得到時才做事；簽章沒變什麼都不做；
+   只重畫摘要與表格（不碰表單）；絕不呼叫 persist() */
+function planTick(){
+  try{
+    if(tab !== "plan" || document.hidden) return;
+    if(!planLast || planLast.ref !== db.plan || !planLast.calc) return;
+    const g = planStates(planLast.calc.slots, planNow());
+    if(planSigOf(g, localToday()) === planLast.sig) return;
+    planKeepFocus(() => planRenderBody(planLast.calc, true));
+  }catch(err){ console.error("練功計畫計時器", err); }
+}
+
+function planRowHtml(r, today, st, isNext, mark){
   const goal = r.pctGain === null ? fmt0(r.plannedExp) + " exp・升到 Lv" + fin(r.pos.level) : fmt0(r.plannedExp) + " exp・+" + planPctTxt(r.pctGain) + "%";
-  return '<tr data-key="' + esc(r.key) + '">' +
+  const key = esc(r.key);
+  const btn = (act, label) => '<button type="button" class="ghost sm" data-key="' + key + '" data-act="' + act + '">' + label + "</button>";
+  let state = "";
+  if(st === "live") state += '<span class="pltag up">進行中</span>';
+  else if(st === "upcoming" && isNext) state += '<span class="pltag">下一個</span>';
+  if(mark) state += '<span class="plmark ' + mark + '">' + (mark === "done" ? "✔ 完成" : "✘ 沒練") + "</span>" + btn("clear", "改");
+  else if(st === "ended") state += '<span class="pltag wait">待填</span>' + btn("done", "完成") + btn("missed", "沒練");
+  return '<tr data-key="' + key + '"' + (st === "live" ? ' class="pllive" aria-current="true"' : "") + ">" +
     '<td class="tl p-date">' + esc(planMD(r.date)) + (r.date === today ? '<span class="pltag">今天</span>' : "") + "</td>" +
     '<td class="tl p-week">' + esc(weekday(r.date)) + "</td>" +
     '<td class="p-time">' + esc(planHm(r.start) + "–" + planHm(r.end)) + "</td>" +
     '<td class="p-hrs">' + esc(fmt1(r.hours)) + "</td>" +
     '<td class="p-goal">' + esc(goal) + "</td>" +
     '<td class="p-pos">' + esc("Lv" + fin(r.pos.level) + " " + planPctTxt(r.pos.pct) + "%") + (r.levelUp ? '<span class="pltag up">升級</span>' : "") + "</td>" +
-    '<td class="p-state">—</td></tr>';
+    '<td class="p-state">' + (state || "—") + "</td></tr>";
 }
-function planSummaryHtml(c){
+const planClamp = x => Math.min(100, Math.max(0, fin(x)));
+function planProgressHtml(c, g){
+  const pc = planClamp(g.donePct), sc = planClamp(g.shouldPct);
+  const rate = c.feas.kind === "none" ? null : c.feas.rate;
+  return '<div class="plhint" style="margin-top:10px">進度</div>' +
+    "<div>" + esc("已完成 ") + "<b>" + esc(g.doneN + "／" + g.count) + "</b>" + esc(" 個時段，完成時數 ") + "<b>" + esc(fmt1(g.doneH) + "／" + fmt1(c.totalHours) + " 小時") + "</b>" +
+      esc("，計畫經驗完成度 ") + "<b>" + esc(fmt1(pc) + "%") + "</b></div>" +
+    '<div class="plbar" role="progressbar" aria-label="計畫經驗完成度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + esc(pc.toFixed(1)) +
+      '" aria-valuetext="' + esc("完成 " + fmt1(pc) + "%，應有進度 " + fmt1(sc) + "%") + '"><div class="plbar-fill" style="width:' + esc(pc.toFixed(2)) + '%"></div>' +
+      '<i class="plbar-tick" style="left:' + esc(sc.toFixed(2)) + '%" title="' + esc("應有進度 " + fmt1(sc) + "%") + '"></i></div>' +
+    '<div class="plhint">' + esc("條上的金色刻度是應有進度（已結束時段的計畫經驗 ÷ 總經驗）：" + fmt1(sc) + "%；綠色是完成度：" + fmt1(pc) + "%") + "</div>" +
+    "<div>" + esc("待填 " + g.pending + " 個時段（已結束、還沒填完成或沒練）") + "</div>" +
+    (g.behindN > 0
+      ? '<div class="plno">' + esc("落後 " + g.behindN + " 個時段（約 " + fmt0(g.behindExp) + " exp、" + fmt1(g.behindExp / c.total * 100) + "%）") + "</div>"
+      : '<div class="plok">進度符合計畫</div>') +
+    (g.rescue === null ? "" :
+      '<div class="plsum"><span>補救時速 <b>' + esc(fmt0(g.rescue)) + ' exp/h</b></span><span>預估時速 <b>' + (rate ? esc(fmt0(rate)) + " exp/h" : "未設定") +
+      '</b></span></div><div class="plhint">補救時速：照目前的完成度，剩下還沒結束的時段要這個速度才補得回來。</div>');
+}
+function planSummaryHtml(c, g){
   const f = c.feas;
   let feas;
   if(f.kind === "none") feas = '<div class="plhint">未設定預估時速，無法判斷能不能達成</div>';
@@ -3055,22 +3190,27 @@ function planSummaryHtml(c){
     feas +
     (c.estimated ? '<div class="plhint">含推估的等級經驗，實際可能有出入</div>' : "") +
     '<div class="plhint">這些數字是依你輸入的時速估算的計畫值，不是實際獲得的經驗。</div>' +
-    '<div class="plwip">（暫時）進度、落後與補救時速於下一步實作。</div>';
+    planProgressHtml(c, g);
 }
-/* 摘要、排程表、分頁。必要時決定目前頁（planPage 是 0＝翻到包含今天的那頁） */
-function planRenderBody(c){
+/* 摘要、排程表、分頁。必要時決定目前頁（planPage 是 0＝翻到包含今天的那頁）。
+   live＝true 時只重畫摘要與表格（計時器用），不動分頁與表單 */
+function planRenderBody(c, live){
   const $ = id => document.getElementById(id);
-  const size = planPageSize, pages = planPages(c, size), today = localToday();
+  const size = planPageSize, pages = planPages(c, size), now = planNow(), today = localToday();
   if(!(planPage >= 1)) planPage = planTodayPage(c, today, size);
   planPage = Math.min(Math.max(1, Math.floor(planPage)), pages);
   const rg = planPageRange(c, planPage, size);
-  const rows = c.slots.filter(r => r.date >= rg.lo && r.date <= rg.hi);
-  $("planCount").textContent = c.slots.length + " 個練功時段";
-  $("planSummary").innerHTML = planSummaryHtml(c);
+  const g = planStates(c.slots, now), marks = planMarksOf(db.plan);
+  planLast = {ref: db.plan, calc: c, sig: planSigOf(g, today)};
+  $("planSummary").innerHTML = planSummaryHtml(c, planProgress(c, marks, g.st));
+  let body = "";
+  c.slots.forEach((r, i) => { if(r.date >= rg.lo && r.date <= rg.hi) body += planRowHtml(r, today, g.st[i], i === g.next, planMarkOf(marks, r.key)); });
   $("planTableBox").innerHTML =
     '<table id="tblPlan"><thead><tr><th class="tl">日期</th><th class="tl">星期</th><th>時段</th><th>時數（小時）</th>' +
     '<th title="這個時段要完成的計畫經驗；同一級內換算成 %">本時段目標</th><th title="這個時段結束時應該到的位置">目標位置</th><th>狀態</th></tr></thead><tbody>' +
-    rows.map(r => planRowHtml(r, today)).join("") + "</tbody></table>";
+    body + "</tbody></table>";
+  if(live) return;
+  $("planCount").textContent = c.slots.length + " 個練功時段";
   $("planSize").value = String(size);
   $("planRange").textContent = pages > 1 ? planMD(rg.lo) + "～" + planMD(rg.hi) + "，共 " + c.days + " 天" : "共 " + c.days + " 天";
   $("planLinks").innerHTML = pages <= 1 ? "" :
@@ -3266,6 +3406,7 @@ function renderPlan(){
         if(!calc.ok) why = {msgs: [calc.error + (calc.missing ? "。補上等級表就會恢復，已填的標記不會消失" : "")], newer: false, big: false};
       }
     }
+    if(!exists || why) planLast = null;
     $("planEmpty").hidden = exists;
     $("planBad").hidden = !why;
     $("planBody").hidden = !exists || !!why;
@@ -3281,7 +3422,7 @@ function renderPlan(){
         `<p class="plhint">資料沒有被刪掉，也沒有被改動，由你決定要不要刪。其他頁籤不受影響。</p>` +
         `<div class="btnrow"><button type="button" class="danger" id="planBadDelete">刪除這份計畫</button></div>`;
     }else if(exists){
-      planRenderBody(calc);
+      planRenderBody(calc, false);
     }
     planFormSync(exists && !why ? p : null);
   }catch(err){
@@ -3345,6 +3486,13 @@ document.getElementById("planLinks").addEventListener("click", e => {
   document.getElementById("pagePlan").scrollIntoView({block: "start", behavior: "smooth"});
 });
 document.getElementById("planToday").addEventListener("click", () => { planPage = 0; renderPlan(); });
+// 完成／沒練／改：事件委派在表格容器上（重畫後不用重新掛）
+document.getElementById("planTableBox").addEventListener("click", e => {
+  const b = e.target.closest("button[data-act]"); if(!b) return;
+  planMark(safeStr(b.dataset.key), safeStr(b.dataset.act));
+});
+planTickStart();
+document.addEventListener("visibilitychange", () => { if(!document.hidden) planTick(); });
 
 /* ---------- boot ---------- */
 document.getElementById("f-date").value = new Date().toISOString().slice(0,10);
