@@ -1,6 +1,5 @@
 # 練功計畫
 
-> **狀態：規格（尚未實作）**。實作完成、文件與程式核對一致後，移除這一行。
 > 董事長裁示（2026-10-06）：資料存 `db.plan`（資料格式變更，已核准）、新增第三頁籤、預估時速預設取歷史可覆寫、
 > 有計畫時換資料先確認、首版不支援跨午夜。
 
@@ -84,7 +83,7 @@
 | 狀態／操作 | 見下 |
 
 - 分頁：每頁 7／14／30 個**日曆天**（從起日算起，預設 14，**跟其他兩頁的分頁各自獨立、各自記住**）。進頁籤、更新計畫時自動翻到「包含今天」的那頁（今天在計畫之前停在第 1 頁，之後停在最後一頁）；`#planToday` 按鈕「回到今天」。
-- 900px 以下改成每時段一張卡片（細節在實作階段定，原則同每日進度頁：同樣的資訊、數字加單位）。
+- 900px 以下改成每時段一張卡片（原則同每日進度頁：同樣的資訊、數字加單位）：日期、星期、時段、時數（加「小時」）排在第一行，「本時段目標」「目標位置」各佔一行，狀態與按鈕靠右；進行中的卡片同樣有底色、左邊框與「進行中」標籤。
 
 ## 行為規則
 
@@ -138,7 +137,7 @@
 
 ### 進行中的更新
 
-- 計畫頁顯示時，每 30 秒（以及頁面從背景回到前景時）檢查一次「狀態簽章」：所有時段的狀態（未開始／進行中／已結束）加上「下一個」是哪一個，**只有簽章改變時才重畫**摘要與表格，所以大部分的檢查什麼都不做，不會干擾捲動與鍵盤焦點。
+- 計畫頁顯示時，每 30 秒（以及頁面從背景回到前景時）檢查一次「狀態簽章」：所有時段的狀態（未開始／進行中／已結束）加上「下一個」是哪一個、再加上今天的日期（跨午夜時「今天」標籤要跟著換），**只有簽章改變時才重畫**摘要與表格，所以大部分的檢查什麼都不做，不會干擾捲動與鍵盤焦點。
 - 重畫前記下目前取得焦點的按鈕（用 `data-key` 與動作識別），重畫後把焦點還給同一顆按鈕（還在的話）；捲動位置不變。
 - 計時器只在 `tab === "plan"` 而且 `document.hidden === false` 時檢查；切到別的頁籤就不做事。
 - 計時器**絕不呼叫 `persist()`**，只有使用者按按鈕才會寫資料。
@@ -227,11 +226,9 @@
 
 ## 相關程式
 
-已實作（`index.html`，S3b／S3c）：`#pagePlan`／`#tabPlan`、`normPlan()`（函式宣告，開機載入會用到）、`planCheck()`、`planSlots()`、`planSpanToEnd()`（期限換算）、`planMissingLevels()`／`planMissingText()`、`planLevelMap()`、`planCalc()`、`planPos()`（規格裡的 `pos(E)`，迭代上限＝等級表列數＋1）、`planDelayDate()`、`planHistRate()`、`planFromRec()`／`heroLevel()`、`planReplaceWarning()`／`planBrief()`／`planMarkCount()`、`renderPlan()`／`planRenderBody()`／`planSummaryHtml()`／`planRowHtml()`、分頁 `planPages()`／`planTodayPage()`／`planPageRange()`、表單 `planFillForm()`／`planFormSync()`／`planSave()`／`planDelete()`、`planPage`／`planPageSize`（UI 偏好；`planPage` ＝ 0 代表「尚未決定，翻到包含今天的那頁」）；改動 `confirmReplaceUnreadable()`、`#btnDemo`／`#btnReset` 的確認框、`cloudAsk()`、`normalize()`。
+`index.html` 裡的實際名稱：`#pagePlan`／`#tabPlan`、`normPlan()`（函式宣告，開機載入會用到）、`planCheck()`、`planSlots()`、`planSpanToEnd()`（期限換算）、`planMissingLevels()`／`planMissingText()`、`planLevelMap()`、`planCalc()`、`planPos()`（規格裡的 `pos(E)`，迭代上限＝等級表列數＋1）、`planDelayDate()`、`planHistRate()`、`planFromRec()`／`heroLevel()`、`planReplaceWarning()`／`planBrief()`／`planMarkCount()`、`renderPlan()`／`planRenderBody()`／`planSummaryHtml()`／`planRowHtml()`、分頁 `planPages()`／`planTodayPage()`／`planPageRange()`、表單 `planFillForm()`／`planFormSync()`／`planSave()`／`planDelete()`、`planPage`／`planPageSize`（UI 偏好；`planPage` ＝ 0 代表「尚未決定，翻到包含今天的那頁」）；改動 `confirmReplaceUnreadable()`、`#btnDemo`／`#btnReset` 的確認框、`cloudAsk()`、`normalize()`。
 
-S3d 已實作：`planNow()`（現在時刻的唯一來源，測試時替換它）、`planSlotTimes()`、`planState()`（`upcoming`／`live`／`ended`）、`planStates()`（含「下一個」）、`planSigOf()`（狀態簽章）、`planMarksOf()`／`planMarkOf()`、`planProgress()`（完成度、應有進度、待填、落後、補救時速）、`planProgressHtml()`、`planMark()`（寫入標記）、`planKeepFocus()`（重畫前後還原焦點與左右捲位置）、`planTickStart()`／`planTick()`（計時器，只有一個 interval，每 30 秒與 `visibilitychange` 回前景時檢查）、`planLast`（最近一次畫出來的計畫，計時器用它比對簽章）。排程表的狀態欄、摘要第 4、5 項都已完成；`localToday()` 也改成取 `planNow()`。
-
-整個功能在整合實測（S3e）之前，上面的「狀態：規格（尚未實作）」先保留。
+時段狀態、標記與計時器：`planNow()`（現在時刻的唯一來源，測試時替換它）、`planSlotTimes()`、`planState()`（`upcoming`／`live`／`ended`）、`planStates()`（含「下一個」）、`planSigOf()`（狀態簽章）、`planMarksOf()`／`planMarkOf()`、`planProgress()`（完成度、應有進度、待填、落後、補救時速）、`planProgressHtml()`、`planMark()`（寫入標記）、`planKeepFocus()`（重畫前後還原焦點與左右捲位置）、`planTickStart()`／`planTick()`（計時器，只有一個 interval，每 30 秒與 `visibilitychange` 回前景時檢查）、`planLast`（最近一次畫出來的計畫，計時器用它比對簽章）。排程表的狀態欄、摘要第 4、5 項都已完成；`localToday()` 也改成取 `planNow()`。
 
 **TDZ**：`normPlan()` 在開機（`let db = load()`）時就會執行，只能用函式宣告、自己的區域變數，以及宣告在那一行之前的頂層變數（例如 `WEEK`）；**不能用之後才宣告的 `const`**（例如新增的 `PLAN_MAX`），常數要寫在函式裡面。它對形狀不對的輸入（`from` 不是物件、`weekly` 不是陣列…）要防禦，**不拋例外**。
 

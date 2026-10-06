@@ -163,7 +163,7 @@ pct   = (level = b 且 R(b) 缺) ? 0 : min(max(rem / R(level) × 100, 0), 99.999
 
 - `doneExp` = 標記為 `done` 的時段的 `plannedExp` 加總；**計畫經驗完成度** `= doneExp / total`。
 - `shouldExp` = 已結束（狀態為「已結束」）的時段的 `plannedExp` 加總；**應有進度** `= shouldExp / total`。
-- **落後**：已結束但標記不是 `done` 的時段數 > 0 時為落後（待填與沒練都算）；落後的經驗 `= shouldExp − doneExp`。用「時段數」判斷、不用經驗差去比大小：每個時段的 `plannedExp` 都 > 0，兩者等價，但前者不怕浮點誤差。
+- **落後**：已結束但標記不是 `done` 的時段數 > 0 時為落後（待填與沒練都算）；落後的經驗 `Y` ＝「已結束且標記不是 `done`」的時段的 `plannedExp` 加總（**不是** `shouldExp − doneExp`：未結束的時段上若有 `done` 標記，差值會變小甚至為負），顯示成「落後 N 個時段（約 Y exp、Y ÷ total %）」。用「時段數」判斷有沒有落後，不用經驗差去比大小，不怕浮點誤差。
 - **標記照存的值計算，不看時段狀態**：還沒結束的時段上若有標記（匯入的資料、系統時間被調回去），`done` 的照樣計入 `doneExp`；`shouldExp` 仍然只算已結束的時段。
 - **補救時速** `= max(0, total − doneExp) / remainingHours`，`remainingHours` 是狀態為「未開始」或「進行中」的時段的 hours 加總；`remainingHours = 0` 時沒有補救時速（計畫期間已結束）。
 - 這裡的 `plannedExp` 是計畫值，**不是實際獲得**；實際進度看經驗條與每日進度頁。

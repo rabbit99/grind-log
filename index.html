@@ -16,6 +16,7 @@
     --gold-soft:#8A7220;
     --crimson:#A8433D;
     --jade:#4E8C6A;
+    --jade-ink:#68B287;   /* 文字用的綠（在 #1B2029 上 6.46:1、在進行中列底色上 5.10:1）；--jade 當文字只有 4.11:1，S3E-PLAN-20261006 */
     --w1:#C9A227; --w2:#5B8DB8; --w3:#A8433D; --w4:#4E8C6A; --w5:#8E6FB0; --w6:#B87333;
     --pad:20px;
     --radius:3px;
@@ -339,7 +340,7 @@
   #pagePlan .plwip{margin:12px 0 0;padding:12px var(--pad);border:1px dashed var(--rule);border-radius:var(--radius);color:var(--bone-dim);font-size:12.5px}
   #pagePlan .plgoal{font-size:15px;margin-bottom:4px;overflow-wrap:anywhere}
   #pagePlan .plgoal b{color:var(--gold);font-weight:600}
-  #pagePlan .plok{color:var(--jade)}
+  #pagePlan .plok{color:var(--jade-ink)}
   #pagePlan .plno{color:#E39A96}
   #pagePlan .plsum{display:flex;gap:6px 28px;flex-wrap:wrap;margin:8px 0}
   #pagePlan .plsum b{font-weight:600}
@@ -355,7 +356,7 @@
   #tblPlan td.p-state .pltag:first-child{margin-left:0}
   #pagePlan .pltag.wait{border-color:var(--crimson);color:#E39A96}
   #pagePlan .plmark{font-weight:600;white-space:nowrap}
-  #pagePlan .plmark.done{color:var(--jade)}
+  #pagePlan .plmark.done{color:var(--jade-ink)}
   #pagePlan .plmark.missed{color:#E39A96}
   #pagePlan .plbar{position:relative;height:14px;background:#0E1218;border:1px solid var(--rule);border-radius:2px;margin:6px 0 4px}
   #pagePlan .plbar-fill{height:100%;background:var(--jade)}
@@ -378,6 +379,14 @@
     #tblPlan td.p-pos::before{content:"目標位置 ";color:var(--bone-dim)}
     #pagePlan .plform{max-width:none}
     #pagePlan .pltimes input{flex:1;width:auto;min-width:0}
+  }
+
+  /* S3E-PLAN-20261006 WCAG AA：全域的 .lblhint（--gold-soft）在面板底色上只有 3.51:1，舊頁不動，只在計畫頁覆寫成 --bone-dim（6.35:1） */
+  #pagePlan .lblhint{color:var(--bone-dim)}
+  #pagePlan ::placeholder{color:var(--bone-dim);opacity:1}
+  /* 320px 寬三個頁籤會換成兩行（60px），把頁面往下推；窄螢幕縮小左右內距讓它們維持一行、高度與兩個頁籤時相同（39px）。375px 以上不受影響 */
+  @media(max-width:360px){
+    .pagetabs button{padding:8px 6px;white-space:nowrap}
   }
 </style>
 </head>

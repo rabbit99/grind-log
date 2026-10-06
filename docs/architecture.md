@@ -28,7 +28,7 @@
 
 | 區段 | 內容 |
 |---|---|
-| `:root` | 色彩變數（`--stone-*`、`--bone*`、`--gold*`、`--crimson`、`--jade`）、人員色 `--w1`～`--w6`、`--pad`、`--radius` |
+| `:root` | 色彩變數（`--stone-*`、`--bone*`、`--gold*`、`--crimson`、`--jade`、`--jade-ink`〔文字用的綠，對比 ≥ 4.5:1，目前只有計畫頁用〕）、人員色 `--w1`～`--w6`、`--pad`、`--radius` |
 | 基本 | `[hidden]{display:none!important}`、body 字型與行高 1.55 |
 | header | 標題 `#docTitle`、存檔狀態 `#saveState` |
 | hero | 經驗條 `.bar`、統計 `.stats`、圖例 `.legend` |
@@ -41,7 +41,7 @@
 | loadbanner | 讀不出資料時的紅框提示 |
 | 頁籤 | `.pagetabs` |
 | 每日進度頁 | `.dlegend`、`#tblDaily`、時間軸 `.track`／`.dseg`；900px 以下改成卡片 |
-| 練功計畫頁 | 全部限定在 `#pagePlan` 底下（`.plform`、`.plrow`、`.plslot`、`.pldays`、`.pltimes`、`.plhint`、`.plwip`），不影響其他兩頁；窄螢幕規則在 `@media(max-width:900px)` |
+| 練功計畫頁 | 全部限定在 `#pagePlan` 底下（`.plform`、`.plrow`、`.plslot`、`.pldays`、`.pltimes`、`.plhint`、`.plok`／`.plno`、`.pltag`、`.plmark`、`.plbar`、排程表 `#tblPlan`），不影響其他兩頁；窄螢幕規則（含 320～360px 的頁籤）在 `@media(max-width:900px)` |
 
 ### HTML
 
@@ -59,7 +59,7 @@ header.top（#docTitle、#saveState）
   標題的 #dayCount、#dailyBody（整塊由 renderDaily 產生）、#dayPager、#dayEmpty
 #pagePlan
   標題的 #planCount、#planEmpty（沒有計畫的說明）、#planBad（計畫無法使用時的原因＋刪除按鈕，由 renderPlan 產生）、
-  #planBody（#planSummary、#planTableBox 內的 #tblPlan、#planPager〔#planSize、#planRange、#planLinks、#planToday〕；摘要第 4、5 項與狀態欄仍是佔位，S3d 實作）、
+  #planBody（#planSummary、#planTableBox 內的 #tblPlan、#planPager〔#planSize、#planRange、#planLinks、#planToday〕；摘要含進度條與落後／補救時速，狀態欄有進行中標示與完成／沒練按鈕）、
   details#planEdit（內含條件表單 #planForm：#pl-* 欄位、#planMsg；沒有計畫時攤開並隱藏 summary）
 ```
 
@@ -84,7 +84,7 @@ header.top（#docTitle、#saveState）
 | Google 試算表同步 | `GOOGLE_CLIENT_ID`、`cloudEnabled`、`cloud`（同步狀態）、`toSheets`／`fromSheets`／`sheetHash`／`sheetProblem`、`cloudLoadGis`／`cloudGetToken`、`cloudApi` 與各 API 函式、`cloudSync`／`cloudLink`／`cloudStep`／`cloudChoose`／`cloudPutLocal`／`cloudTakeCloud`／`cloudAsk`、`cloudMarkDirty`、`cloudReplaceWarning`、`cloudInit`，見 [features/cloud-sync.md](features/cloud-sync.md) |
 | 頁籤 | `applyTab` 與鍵盤、點擊事件（三個頁籤，鍵盤左右／Home／End 循環） |
 | 每日進度 | `addDays`、`normDate`、`dayRow`、`dailyRows`、`addCumulative`、`segHtml`、`dayRowHtml`、`renderDaily` 與分頁事件 |
-| 練功計畫 | `normPlan`（在資料整理區，開機時由 `normalize` 呼叫）、`utcMs`／`planDays`／`planSpanToEnd`（期限換算）、`planKeyOk`、`planSlots`、`planCheck`、`planMissingLevels`／`planMissingText`、`planMarkCount`、`planBrief`、`planReplaceWarning`、`planHistRate`、`localToday`、`planFromRec`；表單：`planMsg`、`planSlotAdd`／`planSlotSync`、`planSyncWorkerSelect`、`planRateInfo`、`planEndShow`、`planFillForm`／`planFormSync`、`planSave`、`planDelete`；`renderPlan`（自己有 try／catch）與表單事件。另有 `heroLevel`（經驗條與「從練功記錄帶入」共用）。S3c 加入：`planLevelMap`、`planPos`、`planDelayDate`、`planCalc`、`planPctTxt`／`planHm`／`planMD`、`planPages`／`planTodayPage`／`planPageRange`、`planRowHtml`、`planSummaryHtml`、`planRenderBody`，以及 `#planSize`／`#planLinks`／`#planToday` 的事件。見 [features/plan.md](features/plan.md)。S3d 加入：`planNow`、`planSlotTimes`、`planState`／`planStates`／`planSigOf`、`planMarksOf`／`planMarkOf`、`planProgress`／`planProgressHtml`、`planMark`、`planKeepFocus`、`planTickStart`／`planTick`（計時器）、`planLast`、`planTimer`，以及 `#planTableBox` 的點擊事件（完成／沒練／改）與 `visibilitychange`。**現在時刻一律從 `planNow()` 取**（`localToday()` 也是），測試時只要替換它 |
+| 練功計畫 | `normPlan`（在資料整理區，開機時由 `normalize` 呼叫）、`utcMs`／`planDays`／`planSpanToEnd`（期限換算）、`planKeyOk`、`planSlots`、`planCheck`、`planMissingLevels`／`planMissingText`、`planMarkCount`、`planBrief`、`planReplaceWarning`、`planHistRate`、`localToday`、`planFromRec`；表單：`planMsg`、`planSlotAdd`／`planSlotSync`、`planSyncWorkerSelect`、`planRateInfo`、`planEndShow`、`planFillForm`／`planFormSync`、`planSave`、`planDelete`；`renderPlan`（自己有 try／catch）與表單事件。另有 `heroLevel`（經驗條與「從練功記錄帶入」共用）。換算與排程表：`planLevelMap`、`planPos`、`planDelayDate`、`planCalc`、`planPctTxt`／`planHm`／`planMD`、`planPages`／`planTodayPage`／`planPageRange`、`planRowHtml`、`planSummaryHtml`、`planRenderBody`，以及 `#planSize`／`#planLinks`／`#planToday` 的事件。見 [features/plan.md](features/plan.md)。時段狀態、標記與計時器：`planNow`、`planSlotTimes`、`planState`／`planStates`／`planSigOf`、`planMarksOf`／`planMarkOf`、`planProgress`／`planProgressHtml`、`planMark`、`planKeepFocus`、`planTickStart`／`planTick`（計時器）、`planLast`、`planTimer`，以及 `#planTableBox` 的點擊事件（完成／沒練／改）與 `visibilitychange`。**現在時刻一律從 `planNow()` 取**（`localToday()` 也是），測試時只要替換它 |
 | 開機 | 表單日期預設今天 → `applyTab()` → `render()` → `syncLoadBanner()` → `cloudInit()` |
 
 ## 資料流

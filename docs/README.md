@@ -37,7 +37,7 @@
 | [features/file-io.md](features/file-io.md) | 匯出、匯入、還原示範資料、清空全部、Electron 開檔／存檔 |
 | [features/storage-recovery.md](features/storage-recovery.md) | 自動儲存、讀不出資料時的保護與救回 |
 | [features/cloud-sync.md](features/cloud-sync.md) | Google 試算表同步（多裝置共用存檔） |
-| [features/plan.md](features/plan.md) | 練功計畫（目標、每週時段表、進行中標示與完成勾選）——規格階段 |
+| [features/plan.md](features/plan.md) | 練功計畫（目標、每週時段表、進行中標示與完成勾選） |
 | [features/layout.md](features/layout.md) | 頁籤、版面、窄螢幕、表格左右捲 |
 
 ## 功能文件的格式
