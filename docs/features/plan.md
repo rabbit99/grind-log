@@ -47,6 +47,12 @@
 
 表單不會因為重畫而被清掉使用者正在輸入的內容（見「進行中的更新」）。
 
+**預設與取整**（實作時的裁定，2026-10-06）：
+
+- **新增模式**（沒有計畫）預設就帶入：起點＝「從練功記錄帶入」的值（有啟用記錄時）、起日＝本地今天、目標 % ＝ 0、預估時速＝歷史時速（有的話，`rateSrc` ＝ `history`）。編輯模式不套用任何預設，一律用 `plan` 存的值。
+- **取整**：「用歷史值」與新增模式預填的預估時速取**四捨五入的整數**（快照存整數）；「從練功記錄帶入」的 % 取 **4 位小數**（顯示本來就是 4 位）。
+- **目標 % 空白視為 0**；起點 % 空白不補，要使用者自己填（會報錯）。
+
 ### 摘要 `#planSummary`
 
 1. 目標：`Lv51 30.5000% → Lv53 0.0000%`，期限 `2026-10-07 ～ 2026-12-31`（共 X 天、Y 個練功時段、Z 小時）。
@@ -77,7 +83,7 @@
 | 目標位置 | 這個時段結束時應該到的位置：`Lv52 12.3456%`；該時段會升級時加「升級」標籤 |
 | 狀態／操作 | 見下 |
 
-- 分頁：每頁 7／14／30 天（預設 14，**跟其他兩頁的分頁各自獨立、各自記住**）。進頁籤、更新計畫時自動翻到「包含今天」的那頁（今天在計畫之前停在第 1 頁，之後停在最後一頁）；`#planToday` 按鈕「回到今天」。
+- 分頁：每頁 7／14／30 個**日曆天**（從起日算起，預設 14，**跟其他兩頁的分頁各自獨立、各自記住**）。進頁籤、更新計畫時自動翻到「包含今天」的那頁（今天在計畫之前停在第 1 頁，之後停在最後一頁）；`#planToday` 按鈕「回到今天」。
 - 900px 以下改成每時段一張卡片（細節在實作階段定，原則同每日進度頁：同樣的資訊、數字加單位）。
 
 ## 行為規則
@@ -146,8 +152,8 @@
 2. `start`、`end` 是 `normDate` 認得的日期，`end ≥ start`，整段 ≤ 366 天。
 3. `from`、`to` 是物件，`level` 是整數、`pct` 是 0 ≤ % < 100 的有限數；目標高於起點（同級時 % 更高）。
 4. `weekly` 是陣列，長度 1～4；每組的 `days` 是非空陣列、值為 0～6 的整數且不重複；`start`、`end` 是有限數、`0 ≤ start < end ≤ 24`、都是 0.25 的倍數；同一星期內不重疊。
-5. `rate` 是 `null`、或有限數且 ≥ 0；`rateSrc` 是 `"history"` 或 `"manual"`（缺少視為 `"manual"`）；`rateWorker` 是字串（缺少視為空字串）。
-6. `marks` 是物件；鍵數 ≤ 1000；每個鍵符合 `YYYY-MM-DD|開始|結束`（日期存在、開始結束是 0.25 的倍數且 0～24）；整個 `plan` 的 `JSON.stringify` 長度 ≤ 40000 字元（單格上限的保險）；值是 `"done"` 或 `"missed"`（其他值：忽略這個標記，不算錯）。
+5. `rate` 是 `null`、**缺少（視為 `null`，不算錯）**、或有限數且 ≥ 0；`rateSrc` 是 `"history"` 或 `"manual"`（缺少視為 `"manual"`）；`rateWorker` 是字串（缺少視為空字串）。
+6. `marks` 是物件，**缺少視為 `{}`（不算錯；載入與匯入都不補，讀取時用 `plan.marks || {}`）**；鍵數 ≤ 1000；每個鍵符合 `YYYY-MM-DD|開始|結束`（日期存在、開始結束是 0.25 的倍數且 0～24）；整個 `plan` 的 `JSON.stringify` 長度 ≤ 40000 字元（單格上限的保險）；值是 `"done"` 或 `"missed"`（其他值：忽略這個標記，不算錯）。
 7. 展開後時段總數 ≤ 1000、總時數 > 0。
 8. 等級表的必要等級都有經驗（這一條是**計算時**檢查，補上等級表就恢復；訊息要指名缺哪一級）。
 
@@ -219,9 +225,11 @@
 - **期限最長 366 天、模板最多 4 組、展開後時段最多 1000 個、時間是 15 分鐘的倍數**：讓 `marks` 有確定的大小上限（見 [format.md](../format.md#plan練功計畫) 的容量估算），因為整份 `db` 的頂層未知欄位要塞進試算表的**一個儲存格**（Google 單格上限 50,000 字元）。只限制天數與模板數不夠：4 組 × 366 天最多會有 1464 個時段；不限制小時的精度，`19.333333333333332` 這種值會讓一個鍵長到約 60 字元。
 - **雲端取代不額外確認**：標記走 `persist()`，會讓這台變成「有修改」，真的有未上傳的計畫時一定會進衝突對話框，不用另外問；多問會和「只有雲端改過就直接下載」的既有規則打架。
 
-## 相關程式（實作後填寫實際名稱）
+## 相關程式
 
-預計：`#pagePlan`／`#tabPlan`、`normPlan()`（函式宣告，開機載入會用到）、`planCheck()`、`planSlots()`、`planCalc()`、`planPos()`、`planHistRate()`、`planState()`、`planReplaceWarning()`、`renderPlan()`、`planTick`（計時器）、`planPage`／`planPageSize`（UI 偏好）；改動 `confirmReplaceUnreadable()`、`#btnDemo`／`#btnReset` 的確認框、`cloudAsk()`。
+已實作（`index.html`，S3b／S3c）：`#pagePlan`／`#tabPlan`、`normPlan()`（函式宣告，開機載入會用到）、`planCheck()`、`planSlots()`、`planSpanToEnd()`（期限換算）、`planMissingLevels()`／`planMissingText()`、`planLevelMap()`、`planCalc()`、`planPos()`（規格裡的 `pos(E)`，迭代上限＝等級表列數＋1）、`planDelayDate()`、`planHistRate()`、`planFromRec()`／`heroLevel()`、`planReplaceWarning()`／`planBrief()`／`planMarkCount()`、`renderPlan()`／`planRenderBody()`／`planSummaryHtml()`／`planRowHtml()`、分頁 `planPages()`／`planTodayPage()`／`planPageRange()`、表單 `planFillForm()`／`planFormSync()`／`planSave()`／`planDelete()`、`planPage`／`planPageSize`（UI 偏好；`planPage` ＝ 0 代表「尚未決定，翻到包含今天的那頁」）；改動 `confirmReplaceUnreadable()`、`#btnDemo`／`#btnReset` 的確認框、`cloudAsk()`、`normalize()`。
+
+尚未實作（S3d）：`planState()`（時段狀態）、完成標記按鈕與寫入、進度／落後／補救時速（摘要第 4、5 項）、`planTick`（計時器）。排程表的「狀態」欄目前只放「—」。
 
 **TDZ**：`normPlan()` 在開機（`let db = load()`）時就會執行，只能用函式宣告、自己的區域變數，以及宣告在那一行之前的頂層變數（例如 `WEEK`）；**不能用之後才宣告的 `const`**（例如新增的 `PLAN_MAX`），常數要寫在函式裡面。它對形狀不對的輸入（`from` 不是物件、`weekly` 不是陣列…）要防禦，**不拋例外**。
 

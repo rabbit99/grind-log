@@ -339,7 +339,28 @@
   #pagePlan .plwip{margin:12px 0 0;padding:12px var(--pad);border:1px dashed var(--rule);border-radius:var(--radius);color:var(--bone-dim);font-size:12.5px}
   #pagePlan .plgoal{font-size:15px;margin-bottom:4px;overflow-wrap:anywhere}
   #pagePlan .plgoal b{color:var(--gold);font-weight:600}
+  #pagePlan .plok{color:var(--jade)}
+  #pagePlan .plno{color:#E39A96}
+  #pagePlan .plsum{display:flex;gap:6px 28px;flex-wrap:wrap;margin:8px 0}
+  #pagePlan .plsum b{font-weight:600}
+  #pagePlan .pltag{display:inline-block;font-size:11px;line-height:1.5;padding:0 6px;border-radius:2px;margin-left:6px;vertical-align:baseline;border:1px solid var(--gold);color:var(--gold)}
+  #pagePlan .pltag.up{background:var(--gold);color:#171200;font-weight:600}
+  /* S3C-PLAN-20261006 排程表。S3c 的 #planTableBox 自己是 .scroll，不再另包一層 */
+  #tblPlan td.p-goal,#tblPlan td.p-pos{white-space:nowrap}
   @media(max-width:900px){
+    /* 窄螢幕：每個時段一張卡片，比照每日進度頁 */
+    #tblPlan thead{display:none}
+    #tblPlan,#tblPlan tbody{display:block}
+    #tblPlan tr{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;padding:10px 14px;border-bottom:1px solid var(--rule)}
+    #tblPlan td{border:0;padding:0;text-align:left;white-space:normal}
+    #tblPlan td.p-date{min-width:3.4em;font-weight:600}
+    #tblPlan td.p-week{min-width:2.2em}
+    #tblPlan td.p-state{margin-left:auto}
+    #tblPlan td.p-hrs{color:var(--bone-dim)}
+    #tblPlan td.p-hrs::after{content:" 小時"}
+    #tblPlan td.p-goal,#tblPlan td.p-pos{flex:0 0 100%;font-size:12.5px}
+    #tblPlan td.p-goal::before{content:"本時段目標 ";color:var(--bone-dim)}
+    #tblPlan td.p-pos::before{content:"目標位置 ";color:var(--bone-dim)}
     #pagePlan .plform{max-width:none}
     #pagePlan .pltimes input{flex:1;width:auto;min-width:0}
   }
@@ -581,7 +602,21 @@
       <div class="body" id="planBad" hidden></div>
       <div id="planBody" hidden>
         <div class="body" id="planSummary"></div>
-        <div class="body" id="planTableBox"></div>
+        <div class="scroll body" id="planTableBox"></div>
+        <div class="pager" id="planPager">
+          <div class="pgsize">
+            每頁
+            <select id="planSize">
+              <option value="7">7</option>
+              <option value="14">14</option>
+              <option value="30">30</option>
+            </select>
+            天
+            <span class="pgrange" id="planRange"></span>
+            <button type="button" class="ghost sm" id="planToday">回到今天</button>
+          </div>
+          <div class="pglinks" id="planLinks"></div>
+        </div>
       </div>
       <details class="tool" id="planEdit" open>
         <summary id="planEditSum">修改條件</summary>
@@ -710,7 +745,7 @@ let focusId = null;          // 新增後要跳到那一筆所在的頁
 let tab = "main";            // 頁籤：main（練功記錄）| daily（每日進度）| plan（練功計畫）
 let dayPage = 1;             // 每日進度頁的分頁，跟記錄頁分開
 let dayPageSize = 20;
-let planPage = 1;            // 練功計畫頁的分頁（排程表於 S3c 實作），跟其他頁各自獨立
+let planPage = 0;            // 練功計畫頁的目前頁，跟其他頁各自獨立；0＝尚未決定，renderPlan 會翻到「包含今天」的那頁
 let planPageSize = 14;       // 7／14／30 天
 try{
   const ui = JSON.parse(localStorage.getItem(UI_KEY) || "{}");
@@ -2374,6 +2409,7 @@ document.getElementById("pageTabs").addEventListener("click", e=>{
   const b = e.target.closest("[data-tab]"); if(!b || b.dataset.tab === tab) return;
   tab = b.dataset.tab;
   persistUI(); applyTab();
+  if(tab === "plan"){ planPage = 0; renderPlan(); }       // 進計畫頁籤時翻到包含今天的那頁
   window.scrollTo({top:0});
 });
 
@@ -2769,12 +2805,12 @@ function planCheck(plan){
       }
     }
     // 5. 預估時速
-    if(!(plan.rate === null || (okNum(plan.rate) && plan.rate >= 0))) errs.push("每小時經驗（rate）必須是空值，或不小於 0 的數字");
+    if(!(plan.rate === undefined || plan.rate === null || (okNum(plan.rate) && plan.rate >= 0))) errs.push("每小時經驗（rate）必須是空值，或不小於 0 的數字");   // 缺少視為 null
     if(plan.rateSrc !== undefined && plan.rateSrc !== "history" && plan.rateSrc !== "manual") errs.push("rateSrc 只能是 history 或 manual");
     if(plan.rateWorker !== undefined && typeof plan.rateWorker !== "string") errs.push("rateWorker 必須是文字");
     // 6. 標記與大小
-    if(!isPlainObj(plan.marks)) errs.push("完成標記（marks）不是物件");
-    else{
+    if(plan.marks !== undefined && !isPlainObj(plan.marks)) errs.push("完成標記（marks）不是物件");   // 缺少視為 {}
+    else if(plan.marks !== undefined){
       const keys = Object.keys(plan.marks);
       if(keys.length > PLAN_MAX_SLOTS){ errs.push("完成標記有 " + keys.length + " 個，超過上限 " + PLAN_MAX_SLOTS + " 個"); errs.big = true; }
       else{
@@ -2862,6 +2898,186 @@ function planFromRec(){
   if(!all.length) return null;
   const {lv, cur} = heroLevel(all);
   return {level: lv, pct: cur.reduce((a, s) => a + pctOf(s), 0)};
+}
+
+/* ----- 計畫換算（S3C-PLAN-20261006）：docs/calculations.md「練功計畫」。純函式，不拋例外 ----- */
+/* 等級表 → Map(等級數字 → {r: 升級經驗（沒有效值是 0）, est: 是否推估})。第一列為準，跟 levelInfo 同一套比對 */
+function planLevelMap(){
+  const m = new Map();
+  for(const l of (Array.isArray(db.levels) ? db.levels : [])){
+    if(!isPlainObj(l)) continue;
+    const k = Number(l.level);
+    if(!Number.isFinite(k) || m.has(k)) continue;
+    const r = Number(l.required);
+    m.set(k, {r: Number.isFinite(r) && r > 0 ? r : 0, est: l.confidence === "estimated"});
+  }
+  return m;
+}
+/* 累計經驗 E（0～total）→ 位置 {level, pct}。cx = {a, pa, b, pb, lv}。
+   容許誤差用相對值（R 的百萬分之一）；迭代上限是等級表列數 + 1，不會因為等級差很大而卡住；
+   pct 夾在 0～99.9999，不會顯示 -0.0000% 或 100.0000% */
+function planPos(E, cx){
+  const R = L => { const x = cx.lv.get(L); return x ? x.r : 0; };
+  let rem = cx.pa / 100 * R(cx.a) + E, level = cx.a;
+  for(let i = 0, cap = cx.lv.size + 1; i < cap && level < cx.b && rem >= R(level) * (1 - 1e-6); i++){ rem -= R(level); level++; }
+  const r = R(level);
+  let pct = (level === cx.b && !r) ? 0 : Math.min(Math.max(rem / r * 100, 0), 99.9999);
+  if(!Number.isFinite(pct)) pct = 0;
+  return {level, pct: pct || 0};
+}
+/* 同一組每週時段從結束日次日往後找，最多到起日後 3660 天，第一個使 rate × 累計時數 ≥ thr 的時段日期；找不到是 null */
+function planDelayDate(plan, rate, thr, hours){
+  const num3 = iso => iso.split("-").map(Number);
+  const [sy, sm, sd] = num3(normDate(plan.start));
+  const [ey, em, ed] = num3(normDate(plan.end));
+  const limitMs = utcMs(sy, sm, sd) + 3660 * 864e5;
+  const limit = planIso(limitMs);
+  let cs = planIso(utcMs(ey, em, ed) + 864e5);
+  while(cs <= limit){
+    const [y, m, d] = num3(cs);
+    const ce = planIso(Math.min(utcMs(y, m, d) + 365 * 864e5, limitMs));
+    for(const sl of planSlots(Object.assign({}, plan, {start: cs, end: ce}))){
+      hours += sl.hours;
+      if(rate * hours >= thr) return sl.date;
+    }
+    const [y2, m2, d2] = num3(ce);
+    cs = planIso(utcMs(y2, m2, d2) + 864e5);
+  }
+  return null;
+}
+/* 計畫換算。回傳 {ok:true, total, needRate, totalHours, slots, estimated, feas, from, to, start, end, days}
+   或 {ok:false, error, missing?}。slots 每個時段多了 plannedExp、cum、hoursCum、startPos、pos、levelUp、pctGain（跨級是 null）。
+   feas：{kind:"none"} | {kind:"ok", rate, done, early} | {kind:"short", rate, pctDone, needRate, raise, delay} */
+function planCalc(plan){
+  try{
+    const errs = planCheck(plan);
+    if(errs.length) return {ok: false, error: errs.join("；")};
+    const m = planMissingLevels(plan);
+    if(m.total) return {ok: false, error: planMissingText(m), missing: true};
+    const a = plan.from.level, pa = plan.from.pct, b = plan.to.level, pb = plan.to.pct;
+    const lv = planLevelMap();
+    const R = L => { const x = lv.get(L); return x ? x.r : 0; };
+    let total, estimated = false;
+    if(a < b){
+      // 逐級加總一律走等級表（升序），不從 a 掃到 b
+      const ks = [...lv.keys()].filter(k => Number.isInteger(k) && k >= a && k < b).sort((x, y) => x - y);
+      total = 0;
+      for(const k of ks){ total += R(k); if(lv.get(k).est) estimated = true; }
+      total = total - pa / 100 * R(a) + (pb > 0 ? pb / 100 * R(b) : 0);
+      if(pb > 0 && lv.get(b).est) estimated = true;
+    }else{
+      total = (pb - pa) / 100 * R(a);
+      if(lv.get(a).est) estimated = true;
+    }
+    if(!(Number.isFinite(total) && total > 0)) return {ok: false, error: "所需總經驗算不出來（必須大於 0）"};
+    const slots = planSlots(plan);
+    const totalHours = slots.reduce((x, s) => x + s.hours, 0);
+    if(!slots.length || !(totalHours > 0)) return {ok: false, error: "這段期間沒有任何可練的時段"};
+    const needRate = total / totalHours;
+    const cx = {a, pa, b, pb, lv};
+    let cumH = 0, prev = {level: a, pct: pa};
+    const rows = slots.map((s, i) => {
+      cumH += s.hours;
+      const last = i === slots.length - 1;
+      const cum = last ? total : needRate * cumH;                    // 最後一個直接取 total、位置直接取目標，避免浮點誤差
+      const pos = last ? {level: b, pct: pb} : planPos(cum, cx);
+      const row = Object.assign({}, s, {plannedExp: needRate * s.hours, cum, hoursCum: cumH, startPos: prev, pos, levelUp: pos.level > prev.level});
+      row.pctGain = pos.level === prev.level ? Math.max(0, pos.pct - prev.pct) : null;
+      prev = pos;
+      return row;
+    });
+    const start = normDate(plan.start), end = normDate(plan.end);
+    let feas = {kind: "none"};
+    const rate = plan.rate;
+    if(typeof rate === "number" && Number.isFinite(rate) && rate > 0){
+      const produced = rate * totalHours, thr = total * (1 - 1e-9);
+      if(produced >= thr){
+        const hit = rows.find(r => rate * r.hoursCum >= thr) || rows[rows.length - 1];
+        feas = {kind: "ok", rate, done: hit.date, early: planDays(hit.date, end) - 1};
+      }else{
+        feas = {kind: "short", rate, pctDone: produced / total * 100, needRate, raise: (needRate / rate - 1) * 100, delay: planDelayDate(plan, rate, thr, totalHours)};
+      }
+    }
+    return {ok: true, total, needRate, totalHours, slots: rows, estimated, feas, from: {level: a, pct: pa}, to: {level: b, pct: pb}, start, end, days: planDays(start, end)};
+  }catch(err){
+    return {ok: false, error: "計畫換算失敗：" + safeStr(err && err.message)};
+  }
+}
+/* 顯示用：%（4 位小數）不會出現 -0.0000 或 100.0000；時間 19.25 → 19:15 */
+function planPctTxt(x){
+  const n = fin(x);
+  if(!(n > 0)) return "0.0000";
+  const t = fmt4(n);
+  return n < 100 && /^100/.test(t) ? "99.9999" : t;
+}
+function planHm(v){ const h = Math.floor(v), mi = Math.round((v - h) * 60); return String(h).padStart(2, "0") + ":" + String(mi).padStart(2, "0"); }
+function planMD(iso){ return safeStr(iso).slice(5).replace("-", "/"); }
+/* 分頁：每頁 size 個日曆天（從起日算起）。今天在計畫前 → 第 1 頁，之後 → 最後一頁。today 是本地日期 */
+function planPages(calc, size){ return Math.max(1, Math.ceil(calc.days / size)); }
+function planTodayPage(calc, today, size){
+  if(today < calc.start) return 1;
+  if(today > calc.end) return planPages(calc, size);
+  return Math.floor((planDays(calc.start, today) - 1) / size) + 1;
+}
+/* 第 page 頁涵蓋的日期範圍 [lo, hi] */
+function planPageRange(calc, page, size){
+  const [y, m, d] = calc.start.split("-").map(Number);
+  const lo = planIso(utcMs(y, m, d) + (page - 1) * size * 864e5);
+  const hi = planIso(utcMs(y, m, d) + (page * size - 1) * 864e5);
+  return {lo, hi: hi > calc.end ? calc.end : hi};
+}
+function planRowHtml(r, today){
+  const goal = r.pctGain === null ? fmt0(r.plannedExp) + " exp・升到 Lv" + fin(r.pos.level) : fmt0(r.plannedExp) + " exp・+" + planPctTxt(r.pctGain) + "%";
+  return '<tr data-key="' + esc(r.key) + '">' +
+    '<td class="tl p-date">' + esc(planMD(r.date)) + (r.date === today ? '<span class="pltag">今天</span>' : "") + "</td>" +
+    '<td class="tl p-week">' + esc(weekday(r.date)) + "</td>" +
+    '<td class="p-time">' + esc(planHm(r.start) + "–" + planHm(r.end)) + "</td>" +
+    '<td class="p-hrs">' + esc(fmt1(r.hours)) + "</td>" +
+    '<td class="p-goal">' + esc(goal) + "</td>" +
+    '<td class="p-pos">' + esc("Lv" + fin(r.pos.level) + " " + planPctTxt(r.pos.pct) + "%") + (r.levelUp ? '<span class="pltag up">升級</span>' : "") + "</td>" +
+    '<td class="p-state">—</td></tr>';
+}
+function planSummaryHtml(c){
+  const f = c.feas;
+  let feas;
+  if(f.kind === "none") feas = '<div class="plhint">未設定預估時速，無法判斷能不能達成</div>';
+  else if(f.kind === "ok"){
+    feas = '<div class="plok">' + esc("依 " + fmt0(f.rate) + " exp/h，預計 " + planMD(f.done) + " 達成，" + (f.early > 0 ? "比期限早 " + f.early + " 天" : "剛好準時")) + "</div>";
+  }else{
+    const pct = Math.floor(f.pctDone * 10) / 10;           // 向下取到 1 位，不會因為進位寫成 100.0%
+    feas = '<div class="plno">' + esc("依 " + fmt0(f.rate) + " exp/h 只能完成目標的 " + fmt1(pct) + "%。要準時達成需要 " + fmt0(f.needRate) +
+      " exp/h（要提高 " + fmt1(f.raise) + "%），或把期限延到約 " + (f.delay ? planMD(f.delay) : "—")) + "</div>";
+  }
+  return '<div class="plgoal">目標：<b>' + esc("Lv" + fin(c.from.level) + " " + planPctTxt(c.from.pct) + "% → Lv" + fin(c.to.level) + " " + planPctTxt(c.to.pct) + "%") + "</b></div>" +
+    '<div class="plhint">' + esc("期限 " + c.start + " ～ " + c.end + "（共 " + c.days + " 天、" + c.slots.length + " 個練功時段、" + fmt1(c.totalHours) + " 小時）") + "</div>" +
+    '<div class="plsum"><span>所需總經驗 <b>' + esc(fmt0(c.total)) + ' exp</b></span><span>需要時速 <b>' + esc(fmt0(c.needRate)) + ' exp/h</b></span>' +
+    "<span>預估時速 <b>" + (f.kind === "none" ? "未設定" : esc(fmt0(f.rate)) + " exp/h") + "</b></span></div>" +
+    feas +
+    (c.estimated ? '<div class="plhint">含推估的等級經驗，實際可能有出入</div>' : "") +
+    '<div class="plhint">這些數字是依你輸入的時速估算的計畫值，不是實際獲得的經驗。</div>' +
+    '<div class="plwip">（暫時）進度、落後與補救時速於下一步實作。</div>';
+}
+/* 摘要、排程表、分頁。必要時決定目前頁（planPage 是 0＝翻到包含今天的那頁） */
+function planRenderBody(c){
+  const $ = id => document.getElementById(id);
+  const size = planPageSize, pages = planPages(c, size), today = localToday();
+  if(!(planPage >= 1)) planPage = planTodayPage(c, today, size);
+  planPage = Math.min(Math.max(1, Math.floor(planPage)), pages);
+  const rg = planPageRange(c, planPage, size);
+  const rows = c.slots.filter(r => r.date >= rg.lo && r.date <= rg.hi);
+  $("planCount").textContent = c.slots.length + " 個練功時段";
+  $("planSummary").innerHTML = planSummaryHtml(c);
+  $("planTableBox").innerHTML =
+    '<table id="tblPlan"><thead><tr><th class="tl">日期</th><th class="tl">星期</th><th>時段</th><th>時數（小時）</th>' +
+    '<th title="這個時段要完成的計畫經驗；同一級內換算成 %">本時段目標</th><th title="這個時段結束時應該到的位置">目標位置</th><th>狀態</th></tr></thead><tbody>' +
+    rows.map(r => planRowHtml(r, today)).join("") + "</tbody></table>";
+  $("planSize").value = String(size);
+  $("planRange").textContent = pages > 1 ? planMD(rg.lo) + "～" + planMD(rg.hi) + "，共 " + c.days + " 天" : "共 " + c.days + " 天";
+  $("planLinks").innerHTML = pages <= 1 ? "" :
+    '<button type="button" data-pg="' + (planPage - 1) + '"' + (planPage <= 1 ? " disabled" : "") + ' title="上一頁">‹</button>' +
+    pageList(pages, planPage).map(x => x === "…" ? '<span class="gap">…</span>'
+      : '<button type="button" data-pg="' + x + '" class="' + (x === planPage ? "on" : "") + '">' + x + "</button>").join("") +
+    '<button type="button" data-pg="' + (planPage + 1) + '"' + (planPage >= pages ? " disabled" : "") + ' title="下一頁">›</button>';
 }
 
 /* ----- 表單 ----- */
@@ -3017,7 +3233,7 @@ function planSave(){
   }
   if(dropped && !confirm("已標記的 " + dropped + " 個時段不在新計畫裡，更新後這些標記會被清掉。\n\n要更新嗎？")) return;
   db.plan = cand;
-  planPage = 1;                       // S3c 會改成翻到「包含今天」的那一頁
+  planPage = 0;                       // 翻到「包含今天」的那一頁
   persist();
   planFormFor = undefined;            // 下次重畫用存好的值重填表單
   $("planEdit").open = false;
@@ -3029,6 +3245,7 @@ function planDelete(){
   if(!confirm("確定刪除這份練功計畫？已標記的 " + planMarkCount(db.plan) + " 個時段也會一起刪掉。")) return;
   delete db.plan;
   persist();
+  planPage = 0;
   planFormFor = undefined;
   planMsg("");
   render();
@@ -3040,13 +3257,13 @@ function renderPlan(){
   try{
     const p = db.plan;
     const exists = p !== undefined && p !== null;
-    let why = null;                    // 計畫不能用的原因：{msgs, newer, big}
+    let why = null, calc = null;       // why＝計畫不能用的原因：{msgs, newer, big}；calc＝planCalc 的結果
     if(exists){
       const errs = planCheck(p);
       if(errs.length) why = {msgs: errs.slice(), newer: errs.newer, big: errs.big};
       else{
-        const m = planMissingLevels(p);
-        if(m.total) why = {msgs: [planMissingText(m) + "。補上等級表就會恢復，已填的標記不會消失"], newer: false, big: false};
+        calc = planCalc(p);
+        if(!calc.ok) why = {msgs: [calc.error + (calc.missing ? "。補上等級表就會恢復，已填的標記不會消失" : "")], newer: false, big: false};
       }
     }
     $("planEmpty").hidden = exists;
@@ -3064,15 +3281,7 @@ function renderPlan(){
         `<p class="plhint">資料沒有被刪掉，也沒有被改動，由你決定要不要刪。其他頁籤不受影響。</p>` +
         `<div class="btnrow"><button type="button" class="danger" id="planBadDelete">刪除這份計畫</button></div>`;
     }else if(exists){
-      const slots = planSlots(p);
-      const hrs = slots.reduce((a, s) => a + s.hours, 0);
-      const s0 = normDate(p.start), e0 = normDate(p.end);
-      $("planCount").textContent = slots.length + " 個練功時段";
-      $("planSummary").innerHTML =
-        `<div class="plgoal">目標：<b>Lv${esc(fin(p.from.level))} ${esc(fmt4(p.from.pct))}% → Lv${esc(fin(p.to.level))} ${esc(fmt4(p.to.pct))}%</b></div>` +
-        `<div class="plhint">期限 ${esc(s0)} ～ ${esc(e0)}（共 ${esc(planDays(s0, e0))} 天、${esc(slots.length)} 個練功時段、${esc(fmt1(hrs))} 小時）</div>` +
-        `<div class="plwip">（暫時）所需經驗、需要時速、可行性與進度摘要於下一步實作。</div>`;
-      $("planTableBox").innerHTML = `<div class="plwip">（暫時）排程表於下一步實作。</div>`;
+      planRenderBody(calc);
     }
     planFormSync(exists && !why ? p : null);
   }catch(err){
@@ -3119,6 +3328,23 @@ document.getElementById("planForm").addEventListener("click", e => {
   }
   else if(b.id === "pl-delete") planDelete();
 });
+
+document.getElementById("planSize").addEventListener("change", e => {
+  const n = parseInt(e.target.value, 10);
+  if(![7,14,30].includes(n)) return;
+  const first = (Math.max(1, planPage) - 1) * planPageSize;       // 盡量停在原本看到的那幾天附近
+  planPageSize = n;
+  planPage = Math.floor(first / planPageSize) + 1;
+  persistUI(); renderPlan();
+});
+document.getElementById("planLinks").addEventListener("click", e => {
+  const b = e.target.closest("[data-pg]"); if(!b || b.disabled) return;
+  const pg = parseInt(b.dataset.pg, 10);
+  if(!isFinite(pg)) return;
+  planPage = pg; renderPlan();
+  document.getElementById("pagePlan").scrollIntoView({block: "start", behavior: "smooth"});
+});
+document.getElementById("planToday").addEventListener("click", () => { planPage = 0; renderPlan(); });
 
 /* ---------- boot ---------- */
 document.getElementById("f-date").value = new Date().toISOString().slice(0,10);
