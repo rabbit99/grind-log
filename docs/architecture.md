@@ -41,13 +41,14 @@
 | loadbanner | 讀不出資料時的紅框提示 |
 | 頁籤 | `.pagetabs` |
 | 每日進度頁 | `.dlegend`、`#tblDaily`、時間軸 `.track`／`.dseg`；900px 以下改成卡片 |
+| 練功計畫頁 | 全部限定在 `#pagePlan` 底下（`.plform`、`.plrow`、`.plslot`、`.pldays`、`.pltimes`、`.plhint`、`.plwip`），不影響其他兩頁；窄螢幕規則在 `@media(max-width:900px)` |
 
 ### HTML
 
 ```
 header.top（#docTitle、#saveState）
 #loadBanner（讀不出資料時才顯示）
-#pageTabs（練功記錄｜每日進度）
+#pageTabs（練功記錄｜每日進度｜練功計畫）
 #pageMain
   .hero（經驗條）
   .cols
@@ -56,6 +57,10 @@ header.top（#docTitle、#saveState）
            details：人員與時薪（#tblWorkerEdit）、等級經驗對照表（#tblLevels、#lvMsg）
 #pageDaily
   標題的 #dayCount、#dailyBody（整塊由 renderDaily 產生）、#dayPager、#dayEmpty
+#pagePlan
+  標題的 #planCount、#planEmpty（沒有計畫的說明）、#planBad（計畫無法使用時的原因＋刪除按鈕，由 renderPlan 產生）、
+  #planBody（#planSummary、#planTableBox；S3b 先放「暫時」佔位，摘要與排程表 #tblPlan 於 S3c 實作）、
+  details#planEdit（內含條件表單 #planForm：#pl-* 欄位、#planMsg；沒有計畫時攤開並隱藏 summary）
 ```
 
 ### JS（依出現順序）
@@ -66,7 +71,7 @@ header.top（#docTitle、#saveState）
 | 示範資料 | `seed()` |
 | 狀態 | `loadProblem`、`db = load()`、`editingId`、`UI_KEY`、UI 狀態（`page`、`pageSize`、`focusId`、`tab`、`dayPage`、`dayPageSize`）、`persistUI()` |
 | 載入 | `load()` |
-| 資料整理 | `safeStr`、`cleanId`、`isPlainObj`、`numField`、`normalize` |
+| 資料整理 | `safeStr`、`cleanId`、`isPlainObj`、`numField`、`normalize`、`normPlan` |
 | 儲存 | `persist()`、`saveTimer`、`setSaveState()` |
 | 計算 | `num`、`pctOf`、`numOrNaN`、`lvOf`、`hoursOf`、`billHoursOf`、`levelInfo`、`workerOf`、`colorOf`、`derive`、`startKey`、`byStart`、`sorted`、`isOn`、`activeSorted` |
 | 格式化 | `fin`、`fmt0`／`fmt1`／`fmt2`／`fmt4`、`weekday`、`esc`、`hhmm` |
@@ -77,8 +82,9 @@ header.top（#docTitle、#saveState）
 | 檔案 | `resumeSaving`、`applyLoaded`、`NOT_SAVED*`、`scrollRO`、`syncLoadBanner`、「下載原始內容」`#btnDownloadRaw` 的事件、`resetEditUI`、`ioMsg`、`download`、`stamp`、`csvCell`、`backupAdvice`、`confirmReplaceUnreadable`，以及匯出、匯入、還原示範、清空的事件 |
 | Electron | `if(window.grindLogNative){…}`：開檔、存檔、選單 |
 | Google 試算表同步 | `GOOGLE_CLIENT_ID`、`cloudEnabled`、`cloud`（同步狀態）、`toSheets`／`fromSheets`／`sheetHash`／`sheetProblem`、`cloudLoadGis`／`cloudGetToken`、`cloudApi` 與各 API 函式、`cloudSync`／`cloudLink`／`cloudStep`／`cloudChoose`／`cloudPutLocal`／`cloudTakeCloud`／`cloudAsk`、`cloudMarkDirty`、`cloudReplaceWarning`、`cloudInit`，見 [features/cloud-sync.md](features/cloud-sync.md) |
-| 頁籤 | `applyTab` 與鍵盤、點擊事件 |
+| 頁籤 | `applyTab` 與鍵盤、點擊事件（三個頁籤，鍵盤左右／Home／End 循環） |
 | 每日進度 | `addDays`、`normDate`、`dayRow`、`dailyRows`、`addCumulative`、`segHtml`、`dayRowHtml`、`renderDaily` 與分頁事件 |
+| 練功計畫 | `normPlan`（在資料整理區，開機時由 `normalize` 呼叫）、`utcMs`／`planDays`／`planSpanToEnd`（期限換算）、`planKeyOk`、`planSlots`、`planCheck`、`planMissingLevels`／`planMissingText`、`planMarkCount`、`planBrief`、`planReplaceWarning`、`planHistRate`、`localToday`、`planFromRec`；表單：`planMsg`、`planSlotAdd`／`planSlotSync`、`planSyncWorkerSelect`、`planRateInfo`、`planEndShow`、`planFillForm`／`planFormSync`、`planSave`、`planDelete`；`renderPlan`（自己有 try／catch）與表單事件。另有 `heroLevel`（經驗條與「從練功記錄帶入」共用）。見 [features/plan.md](features/plan.md)。**S3b 已做資料層與骨架；`planCalc`、排程表、時段狀態與完成標記、計時器尚未實作** |
 | 開機 | 表單日期預設今天 → `applyTab()` → `render()` → `syncLoadBanner()` → `cloudInit()` |
 
 ## 資料流
@@ -105,15 +111,17 @@ header.top（#docTitle、#saveState）
 | `saveTimer` | 存檔狀態訊息 2.2 秒後消失的計時器 |
 | `page`、`pageSize` | 記錄表的目前頁與每頁筆數（10／20／50） |
 | `focusId` | 剛新增的記錄 id，重畫時翻到它所在的頁，用完清掉 |
-| `tab` | 目前頁籤：`"main"` 或 `"daily"` |
+| `tab` | 目前頁籤：`"main"`、`"daily"` 或 `"plan"` |
 | `dayPage`、`dayPageSize` | 每日進度頁的目前頁與每頁天數 |
+| `planPage`、`planPageSize` | 練功計畫頁的目前頁與每頁天數（7／14／30，預設 14；`planPage` 的翻頁於 S3c 啟用） |
+| `planRateSrc`、`planFormFor`、`planFormDb` | 計畫表單的暫存：目前預估時速的來源（`history`／`manual`）、表單上次是用哪份計畫與哪份 `db` 填的（沒變就不重填，避免洗掉使用者正在輸入的內容） |
 
 ## localStorage
 
 | key | 內容 |
 |---|---|
 | `grind-log/v1` | 整份資料的 JSON |
-| `grind-log/v1:ui` | UI 偏好：`{pageSize, tab, dayPageSize}` |
+| `grind-log/v1:ui` | UI 偏好：`{pageSize, tab, dayPageSize, planPageSize}`（`tab` 可以是 `"plan"`；`planPageSize` 只認 7／14／30） |
 | `grind-log/v1:unreadable`、`grind-log/v1:unreadable-<時間戳>` | 讀不出來的原文備份，見 [features/storage-recovery.md](features/storage-recovery.md) |
 | `grind-log/v1:sync` | Google 試算表同步狀態：`{fileId, hash, dirty}`，見 [features/cloud-sync.md](features/cloud-sync.md) |
 | `grind-log/v1:local-backup` | 「用雲端的」取代這台之前另存的資料 `{savedAt, data}`，只有一份；一般下載不會蓋掉已有的備份，見 [features/cloud-sync.md](features/cloud-sync.md) |
@@ -135,7 +143,8 @@ Google 的存取權杖只放在記憶體，不寫進 localStorage。
 - 事件處理函式只在開機後才會執行，可以放心使用任何頂層 `const`。
 
 開機最後的 `render()` 包在 try／catch 裡。畫不出來時，檔案區會顯示「資料有問題，畫面無法完整顯示。請先「匯出 JSON」備份，再「還原示範資料」或匯入正確的檔案。」，按鈕照樣可以用。
-每日進度頁另外有自己的 try／catch，那一頁出錯不會影響練功記錄頁。
+每日進度頁另外有自己的 try／catch，那一頁出錯不會影響練功記錄頁。練功計畫頁的 `renderPlan` 也一樣：自己 try／catch，出錯只顯示「練功計畫頁顯示失敗，資料本身沒有受影響」。
+`normPlan`（`normalize` 在開機時呼叫）只用函式宣告與區域變數，常數寫在函式裡；之後才宣告的 `PLAN_MAX_SLOTS`、`PLAN_MAX_JSON` 只給 `planCheck` 等事件／畫面階段的函式用。
 
 ## Electron
 
