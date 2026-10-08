@@ -95,6 +95,8 @@ git -c credential.helper= -c credential.helper="$H" push origin main
 ```
 （第 1 節的 `git fetch origin` 同樣加 `-c credential.helper= -c credential.helper="$H"`。）
 
+注意：用 **Bash 工具**執行；只用於 remote 是 `github.com/rabbit99/*` 的 repo，其他 repo 或帳號不得借用；除錯時不得用 `set -x`、`echo "$H"`、`GIT_CURL_VERBOSE`／`GIT_TRACE_CURL`。
+
 確認部署：
 
 1. 用 `gh run list --repo rabbit99/grind-log` 找到對應 commit 的 `pages build and deployment` run。

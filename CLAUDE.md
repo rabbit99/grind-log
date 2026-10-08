@@ -56,7 +56,10 @@ Grind Log 練功記錄：記錄練功時段，把「每時段獲得幾 %」換�
   H='!f(){ echo username=rabbit99; echo password=$(gh auth token --user rabbit99); }; f'
   git -c credential.helper= -c credential.helper="$H" push origin <分支>
   ```
-  能推不代表可以推 `main`：推 main＝上線，仍要使用者說「跑審查，沒問題就合併」。
+  - 用 **Bash 工具**執行（PowerShell 的 `$H`、`$(…)` 寫法不同，會壞）。
+  - **範圍限定**：只用於 remote 是 `github.com/rabbit99/*` 的 repo（目前：grind-log、ai-company）；其他 repo、其他帳號遇到認證問題一律回報使用者，不得借用。
+  - **token 保護**：除錯時不得用 `set -x`、`echo "$H"`、`GIT_CURL_VERBOSE`／`GIT_TRACE_CURL`（會洩漏 header）。
+  - 能推不代表可以推 `main`：推 main＝上線，仍要使用者說「跑審查，沒問題就合併」。
 - Commit 作者：`git -c user.email="vvbest2012@gmail.com" -c user.name="rabbit99" commit …`。
 - 詳細流程、編碼規範、測試方法見 [docs/development.md](docs/development.md)。
 
