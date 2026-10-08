@@ -2684,7 +2684,7 @@ function renderDaily(){
     <div class="dlegend">
       ${used.map(id => `<span><i style="background:${colorOf(id)}"></i>${esc(workerOf(id) ? workerOf(id).name : id)}</span>`).join("")}
       <span class="dim">色塊依真實起訖定位・淡色＝停用・空白＝沒有記錄（不代表沒人練）</span>
-      <button type="button" class="sm sortm" data-sort title="${esc(oi.label)}" aria-label="${esc(oi.label)}">${esc(oi.mobile)}</button>
+      <button type="button" class="sm sortm" data-sort title="${esc(oi.label)}" aria-label="${esc(oi.mobile + "，點一下切換成" + (dateOrder === "desc" ? "舊到新" : "新到舊"))}">${esc(oi.mobile)}</button>
     </div>
     <div class="scroll">
       <table id="tblDaily">
