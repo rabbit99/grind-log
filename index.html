@@ -177,6 +177,11 @@
      這一頁沒有兩個字以上的備註（has-note，見 renderSessions）時不撐，免得表格白白變寬 */
   .is-scroll #tblSessions.has-note td.note{min-width:10em}
   .empty{padding:26px var(--pad);color:var(--bone-dim);font-size:13px}
+  /* S4A-SORT-20261008 日期表頭的排序按鈕：外觀跟表頭文字一致、沒有按鈕框；箭頭佔固定寬度，切換方向時欄寬不變 */
+  .sortbtn{background:transparent;border:0;border-radius:2px;padding:0;margin:0;font:inherit;color:inherit;text-align:inherit;cursor:pointer}
+  .sortbtn:hover{color:var(--bone)}
+  .sortbtn .arrow{display:inline-block;width:1.1em;text-align:center;font-size:.9em}
+  .sortm{display:none}   /* 每日進度頁在窄螢幕（卡片，看不到表頭）才出現的排序按鈕，見 @media(max-width:900px) */
 
   /* ---------- 啟用勾選 ---------- */
   th.cb,td.cb{text-align:center;width:1%;padding-left:12px;padding-right:6px}
@@ -321,6 +326,7 @@
     #tblDaily td.d-cost:not(:empty)::after{content:" 元"}
     #tblDaily td.d-hrs:not(:empty)::after{content:" h"}
     .dlegend .dim{margin-left:0}
+    .sortm{display:inline-block;padding:3px 8px;font-size:12px}
   }
 
   /* ---------- 練功計畫頁（S3B-PLAN-20261006）：全部限定在 #pagePlan，不影響其他兩頁 ---------- */
@@ -534,7 +540,7 @@
           <table id="tblSessions">
             <thead><tr>
               <th class="cb"><label class="allcb" title="勾選或取消這一頁的全部記錄"><input type="checkbox" id="pgAll">啟用</label></th>
-              <th class="tl">日期</th><th class="tl">星期</th><th class="tl">時段</th><th>時數</th><th title="實際計費／有效時數，休息時間不算">計費</th>
+              <th class="tl" id="thDate" aria-sort="descending"><button type="button" class="sortbtn" id="sortSess" title="日期排序：目前新到舊，點一下切換成舊到新" aria-label="日期排序：目前新到舊，點一下切換成舊到新">日期<span class="arrow" aria-hidden="true">▼</span></button></th><th class="tl">星期</th><th class="tl">時段</th><th>時數</th><th title="實際計費／有效時數，休息時間不算">計費</th>
               <th class="tl">人員</th><th>等級</th><th>獲得%</th>
               <th>每小時經驗</th><th>每小時%</th><th>費用</th><th class="tl">備註</th><th class="act"></th>
             </tr></thead>
@@ -768,6 +774,7 @@ let focusId = null;          // 新增後要跳到那一筆所在的頁
 let tab = "main";            // 頁籤：main（練功記錄）| daily（每日進度）| plan（練功計畫）
 let dayPage = 1;             // 每日進度頁的分頁，跟記錄頁分開
 let dayPageSize = 20;
+let dateOrder = "desc";      // 日期顯示順序（S4A-SORT-20261008）：desc 新到舊（預設）| asc 舊到新。只是 UI 偏好，記錄表與每日進度頁共用
 let planPage = 0;            // 練功計畫頁的目前頁，跟其他頁各自獨立；0＝尚未決定，renderPlan 會翻到「包含今天」的那頁
 let planPageSize = 14;       // 7／14／30 天
 try{
@@ -777,8 +784,9 @@ try{
   else if(ui.tab === "plan") tab = "plan";
   if([10,20,50].includes(+ui.dayPageSize)) dayPageSize = +ui.dayPageSize;
   if([7,14,30].includes(+ui.planPageSize)) planPageSize = +ui.planPageSize;
+  if(ui.order === "asc") dateOrder = "asc";      // 只認 "asc"；缺少或其他值一律是預設的 desc
 }catch(e){}
-function persistUI(){ try{ localStorage.setItem(UI_KEY, JSON.stringify({pageSize, tab, dayPageSize, planPageSize})); }catch(e){} }
+function persistUI(){ try{ localStorage.setItem(UI_KEY, JSON.stringify({pageSize, tab, dayPageSize, planPageSize, order: dateOrder})); }catch(e){} }
 
 /* 讀不出原本的資料時，不能默默換成示範資料 —— 使用者一操作就會存檔，把原本的資料蓋掉。
    原文另外備份到 :unreadable，並暫停自動儲存，直到使用者自己匯入、還原示範資料或清空。 */
@@ -1061,6 +1069,33 @@ function sorted(){
     return x === y ? byStart(a,b) : (x < y ? -1 : 1);
   });
 }
+/* 記錄表「顯示」的順序。sorted() 永遠是舊到新（CSV、經驗條、人員效率、逐日累計都依賴它），
+   desc 時只在顯示前把整份清單反轉。分頁、focusId、換每頁筆數、整頁開關一律用這一份，不能各算各的。
+   S4A-SORT-20261008 */
+function sessionOrder(){
+  const a = sorted();
+  return dateOrder === "desc" ? a.reverse() : a;
+}
+/* 日期表頭的排序按鈕文字：目前的順序與「點一下切換成…」 */
+function orderInfo(){
+  const d = dateOrder === "desc";
+  return {aria: d ? "descending" : "ascending", arrow: d ? "▼" : "▲",
+    label: "日期排序：目前" + (d ? "新到舊" : "舊到新") + "，點一下切換成" + (d ? "舊到新" : "新到舊"),
+    mobile: "日期：" + (d ? "新→舊" : "舊→新")};
+}
+function syncOrderUI(){
+  const o = orderInfo();
+  document.getElementById("thDate").setAttribute("aria-sort", o.aria);
+  const b = document.getElementById("sortSess");
+  b.title = o.label; b.setAttribute("aria-label", o.label);
+  b.querySelector(".arrow").textContent = o.arrow;
+}
+/* 只在顯示順序變了才重畫；回到第 1 頁（最新或最舊）。兩個表格共用同一個偏好 */
+function setOrder(v){
+  dateOrder = v === "asc" ? "asc" : "desc";
+  page = 1; dayPage = 1;
+  persistUI(); render();
+}
 /* 只有勾了「啟用」的記錄才列入統計 */
 const isOn = s => s.enabled !== false;
 function activeSorted(){ return sorted().filter(isOn); }
@@ -1214,7 +1249,8 @@ function renderWorkers(){
 
 function renderSessions(){
   const tb = document.querySelector("#tblSessions tbody");
-  const all = sorted();
+  syncOrderUI();
+  const all = sessionOrder();
   const off = all.length - all.filter(isOn).length;
 
   document.getElementById("sessCount").textContent =
@@ -1486,7 +1522,7 @@ document.querySelector("#tblSessions tbody").addEventListener("click", e=>{
 /* 表頭勾選框：一次開關這一頁的全部記錄 */
 document.getElementById("pgAll").addEventListener("change", e=>{
   const from = (page-1)*pageSize;
-  const ids = new Set(sorted().slice(from, from+pageSize).map(s=>s.id));
+  const ids = new Set(sessionOrder().slice(from, from+pageSize).map(s=>s.id));
   const val = e.target.checked;
   db.sessions.forEach(s=>{ if(ids.has(s.id)) s.enabled = val; });
   persist(); render();
@@ -1501,6 +1537,10 @@ document.getElementById("pgSize").addEventListener("change", e=>{
   pageSize = n;
   page = Math.floor(first/pageSize)+1;
   persistUI(); render();
+});
+document.getElementById("sortSess").addEventListener("click", ()=>{
+  setOrder(dateOrder === "desc" ? "asc" : "desc");
+  document.getElementById("sortSess").focus();
 });
 document.getElementById("pgLinks").addEventListener("click", e=>{
   const b = e.target.closest("[data-pg]"); if(!b || b.disabled) return;
@@ -2615,9 +2655,15 @@ function dayRowHtml(r){
   </tr>`;
 }
 
+/* 每日進度頁的顯示順序：有日期的列依 dateOrder，「日期不明」那列不是時間順序，不論順序都固定在最後 */
+function dailyShown(all){
+  const dated = all.filter(r => r.date), odd = all.filter(r => !r.date);
+  return (dateOrder === "desc" ? dated.reverse() : dated).concat(odd);
+}
 function renderDaily(){
   const box = document.getElementById("dailyBody");
-  const rows = dailyRows();
+  const all = dailyRows();                       // 永遠是舊到新（累計、「缺」都在這份上算好）
+  const rows = dailyShown(all);                  // 顯示順序；日期不明那列固定在最後
   const days = rows.filter(r => r.date).length;
   const empty = rows.filter(r => r.date && !r.sessions.length).length;
   const odd = rows.find(r => !r.date);
@@ -2633,15 +2679,17 @@ function renderDaily(){
   const slice = rows.slice(from, from + dayPageSize);
 
   const used = [...new Set(db.sessions.map(s => s.workerId))];
+  const oi = orderInfo();
   box.innerHTML = `
     <div class="dlegend">
       ${used.map(id => `<span><i style="background:${colorOf(id)}"></i>${esc(workerOf(id) ? workerOf(id).name : id)}</span>`).join("")}
       <span class="dim">色塊依真實起訖定位・淡色＝停用・空白＝沒有記錄（不代表沒人練）</span>
+      <button type="button" class="sm sortm" data-sort title="${esc(oi.label)}" aria-label="${esc(oi.label)}">${esc(oi.mobile)}</button>
     </div>
     <div class="scroll">
       <table id="tblDaily">
         <thead><tr>
-          <th class="tl">日期</th><th class="tl">星期</th><th>等級</th>
+          <th class="tl" aria-sort="${oi.aria}"><button type="button" class="sortbtn" data-sort title="${esc(oi.label)}" aria-label="${esc(oi.label)}">日期<span class="arrow" aria-hidden="true">${oi.arrow}</span></button></th><th class="tl">星期</th><th>等級</th>
           <th class="tlcell"><div class="axis">
             <span style="left:0">0</span><span style="left:25%">6</span><span style="left:50%">12</span><span style="left:75%">18</span><span style="left:100%">24</span>
           </div></th>
@@ -2666,6 +2714,14 @@ function renderDaily(){
     `<button data-pg="${dayPage+1}"${dayPage>=pages?" disabled":""} title="下一頁">›</button>`;
 }
 
+document.getElementById("dailyBody").addEventListener("click", e=>{
+  const b = e.target.closest("[data-sort]"); if(!b) return;
+  const mobile = b.classList.contains("sortm");
+  setOrder(dateOrder === "desc" ? "asc" : "desc");
+  // 重畫會換掉按鈕，鍵盤使用者的焦點要還給同一種按鈕
+  const nb = document.querySelector("#dailyBody " + (mobile ? ".sortm" : ".sortbtn") + "[data-sort]");
+  if(nb && nb.focus) nb.focus();
+});
 document.getElementById("daySize").addEventListener("change", e=>{
   const n = parseInt(e.target.value,10);
   if(![10,20,50].includes(n)) return;

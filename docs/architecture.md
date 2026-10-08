@@ -69,11 +69,11 @@ header.top（#docTitle、#saveState）
 |---|---|
 | 常數 | `WCOLORS`、`STORE_KEY`、`WEEK` |
 | 示範資料 | `seed()` |
-| 狀態 | `loadProblem`、`db = load()`、`editingId`、`UI_KEY`、UI 狀態（`page`、`pageSize`、`focusId`、`tab`、`dayPage`、`dayPageSize`）、`persistUI()` |
+| 狀態 | `loadProblem`、`db = load()`、`editingId`、`UI_KEY`、UI 狀態（`page`、`pageSize`、`focusId`、`tab`、`dayPage`、`dayPageSize`、`dateOrder`）、`persistUI()` |
 | 載入 | `load()` |
 | 資料整理 | `safeStr`、`cleanId`、`isPlainObj`、`numField`、`normalize`、`normPlan` |
 | 儲存 | `persist()`、`saveTimer`、`setSaveState()` |
-| 計算 | `num`、`pctOf`、`numOrNaN`、`lvOf`、`hoursOf`、`billHoursOf`、`levelInfo`、`workerOf`、`colorOf`、`derive`、`startKey`、`byStart`、`sorted`、`isOn`、`activeSorted` |
+| 計算 | `num`、`pctOf`、`numOrNaN`、`lvOf`、`hoursOf`、`billHoursOf`、`levelInfo`、`workerOf`、`colorOf`、`derive`、`startKey`、`byStart`、`sorted`、`sessionOrder`（顯示順序）、`orderInfo`、`syncOrderUI`、`setOrder`、`isOn`、`activeSorted` |
 | 格式化 | `fin`、`fmt0`／`fmt1`／`fmt2`／`fmt4`、`weekday`、`esc`、`hhmm` |
 | 畫面 | `render`、`renderHero`、`renderWorkers`、`renderSessions`、`syncAllCb`、`pageList`、`renderPager`、`renderWorkerEdit`、`renderLevels`、`syncBhField`、`fillWorkerSelect` |
 | 表單 | `formMsg`、`readForm`、`validate`，以及儲存、取消的事件 |
@@ -83,7 +83,7 @@ header.top（#docTitle、#saveState）
 | Electron | `if(window.grindLogNative){…}`：開檔、存檔、選單 |
 | Google 試算表同步 | `GOOGLE_CLIENT_ID`、`cloudEnabled`、`cloud`（同步狀態）、`toSheets`／`fromSheets`／`sheetHash`／`sheetProblem`、`cloudLoadGis`／`cloudGetToken`、`cloudApi` 與各 API 函式、`cloudSync`／`cloudLink`／`cloudStep`／`cloudChoose`／`cloudPutLocal`／`cloudTakeCloud`／`cloudAsk`、`cloudMarkDirty`、`cloudReplaceWarning`、`cloudInit`，見 [features/cloud-sync.md](features/cloud-sync.md) |
 | 頁籤 | `applyTab` 與鍵盤、點擊事件（三個頁籤，鍵盤左右／Home／End 循環） |
-| 每日進度 | `addDays`、`normDate`、`dayRow`、`dailyRows`、`addCumulative`、`segHtml`、`dayRowHtml`、`renderDaily` 與分頁事件 |
+| 每日進度 | `addDays`、`normDate`、`dayRow`、`dailyRows`、`addCumulative`、`segHtml`、`dayRowHtml`、`dailyShown`、`renderDaily` 與分頁事件 |
 | 練功計畫 | `normPlan`（在資料整理區，開機時由 `normalize` 呼叫）、`utcMs`／`planDays`／`planSpanToEnd`（期限換算）、`planKeyOk`、`planSlots`、`planCheck`、`planMissingLevels`／`planMissingText`、`planMarkCount`、`planBrief`、`planReplaceWarning`、`planHistRate`、`localToday`、`planFromRec`；表單：`planMsg`、`planSlotAdd`／`planSlotSync`、`planSyncWorkerSelect`、`planRateInfo`、`planEndShow`、`planFillForm`／`planFormSync`、`planSave`、`planDelete`；`renderPlan`（自己有 try／catch）與表單事件。另有 `heroLevel`（經驗條與「從練功記錄帶入」共用）。換算與排程表：`planLevelMap`、`planPos`、`planDelayDate`、`planCalc`、`planPctTxt`／`planHm`／`planMD`、`planPages`／`planTodayPage`／`planPageRange`、`planRowHtml`、`planSummaryHtml`、`planRenderBody`，以及 `#planSize`／`#planLinks`／`#planToday` 的事件。見 [features/plan.md](features/plan.md)。時段狀態、標記與計時器：`planNow`、`planSlotTimes`、`planState`／`planStates`／`planSigOf`、`planMarksOf`／`planMarkOf`、`planProgress`／`planProgressHtml`、`planMark`、`planKeepFocus`、`planTickStart`／`planTick`（計時器）、`planLast`、`planTimer`，以及 `#planTableBox` 的點擊事件（完成／沒練／改）與 `visibilitychange`。**現在時刻一律從 `planNow()` 取**（`localToday()` 也是），測試時只要替換它 |
 | 開機 | 表單日期預設今天 → `applyTab()` → `render()` → `syncLoadBanner()` → `cloudInit()` |
 
@@ -110,6 +110,7 @@ header.top（#docTitle、#saveState）
 | `editingId` | 表單正在修改的記錄 id；`null` 代表新增模式 |
 | `saveTimer` | 存檔狀態訊息 2.2 秒後消失的計時器 |
 | `page`、`pageSize` | 記錄表的目前頁與每頁筆數（10／20／50） |
+| `dateOrder` | 日期顯示順序 `"desc"`（新到舊，預設）或 `"asc"`；記錄表與每日進度頁共用；存在 UI key 的 `order`，只認 `"asc"`。`sessionOrder()` 依它決定記錄表的顯示順序，`dailyShown()` 決定每日進度頁的；`sorted()` 不受影響 |
 | `focusId` | 剛新增的記錄 id，重畫時翻到它所在的頁，用完清掉 |
 | `tab` | 目前頁籤：`"main"`、`"daily"` 或 `"plan"` |
 | `dayPage`、`dayPageSize` | 每日進度頁的目前頁與每頁天數 |
@@ -122,7 +123,7 @@ header.top（#docTitle、#saveState）
 | key | 內容 |
 |---|---|
 | `grind-log/v1` | 整份資料的 JSON |
-| `grind-log/v1:ui` | UI 偏好：`{pageSize, tab, dayPageSize, planPageSize}`（`tab` 可以是 `"plan"`；`planPageSize` 只認 7／14／30） |
+| `grind-log/v1:ui` | UI 偏好：`{pageSize, tab, dayPageSize, planPageSize, order}`（`tab` 可以是 `"plan"`；`planPageSize` 只認 7／14／30） |
 | `grind-log/v1:unreadable`、`grind-log/v1:unreadable-<時間戳>` | 讀不出來的原文備份，見 [features/storage-recovery.md](features/storage-recovery.md) |
 | `grind-log/v1:sync` | Google 試算表同步狀態：`{fileId, hash, dirty}`，見 [features/cloud-sync.md](features/cloud-sync.md) |
 | `grind-log/v1:local-backup` | 「用雲端的」取代這台之前另存的資料 `{savedAt, data}`，只有一份；一般下載不會蓋掉已有的備份，見 [features/cloud-sync.md](features/cloud-sync.md) |
