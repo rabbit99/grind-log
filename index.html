@@ -1450,7 +1450,7 @@ function syncBhField(userChange){
     // S6A4-FIX-20261009：只有使用者自己換了人員（userChange）才清空，跟以前的行為一樣；
     // 模組開關、重畫、在「人員與時薪」取消人員的計費這些隱藏原因都保留欄位的值，
     // 否則編輯中切換一下就會把記錄原本的計費時數存成空值（費用與效率跟著變）
-    if(userChange){ document.getElementById("f-bh").value = ""; if(editingId) bhCleared = true; }
+    if(userChange === true && costOn()){ document.getElementById("f-bh").value = ""; if(editingId) bhCleared = true; }
     return;
   }
   const a = parseFloat(document.getElementById("f-start").value);
@@ -1459,8 +1459,8 @@ function syncBhField(userChange){
   document.getElementById("f-bh").placeholder = span===null ? "同時段" : fmt1(span);
 }
 document.getElementById("f-worker").addEventListener("change", ()=>syncBhField(true));
-document.getElementById("f-start").addEventListener("input", syncBhField);
-document.getElementById("f-end").addEventListener("input", syncBhField);
+document.getElementById("f-start").addEventListener("input", ()=>syncBhField());
+document.getElementById("f-end").addEventListener("input", ()=>syncBhField());
 
 /* 表單選的人員不在名單裡（刪掉了，或記錄本來就對不到人）時，保留原本的 id、顯示成「找不到」。
    不能讓瀏覽器自動跳到第一位 —— 正在修改的記錄一按「儲存修改」，就悄悄變成別人的了 */
