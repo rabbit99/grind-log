@@ -393,6 +393,12 @@
   @media(max-width:360px){
     .pagetabs button{padding:8px 6px;white-space:nowrap}
   }
+  /* S6A-MOD-20261009 可選模組「計費與成本」：關閉時只隱藏顯示（body.cost-off），資料與計算不變 */
+  body.cost-off .c-cost{display:none!important}
+  .costbox{margin:0 0 14px}
+  .costlbl{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--bone);cursor:pointer}
+  .costlbl input{width:auto;padding:0;margin:3px 0 0;accent-color:var(--gold);flex:none}
+  .costnote{font-size:11.5px;line-height:1.5;color:var(--bone-dim);margin:4px 0 0 24px}
 </style>
 </head>
 <body>
@@ -521,12 +527,12 @@
     <!-- right -->
     <div class="main">
       <section class="panel">
-        <h2>人員效率 <span class="hint">每百萬經驗成本是跨等級唯一可比的價格</span></h2>
+        <h2>人員效率 <span class="hint c-cost">每百萬經驗成本是跨等級唯一可比的價格</span></h2>
         <div class="scroll">
           <table id="tblWorkers">
             <thead><tr>
               <th class="tl">人員</th><th>時數</th><th>獲得%</th><th>獲得經驗</th>
-              <th>每小時經驗</th><th>每小時%</th><th>費用</th><th>每百萬經驗成本</th>
+              <th>每小時經驗</th><th>每小時%</th><th class="c-cost">費用</th><th class="c-cost">每百萬經驗成本</th>
             </tr></thead>
             <tbody></tbody>
             <tfoot></tfoot>
@@ -540,9 +546,9 @@
           <table id="tblSessions">
             <thead><tr>
               <th class="cb"><label class="allcb" title="勾選或取消這一頁的全部記錄"><input type="checkbox" id="pgAll">啟用</label></th>
-              <th class="tl" id="thDate" aria-sort="descending"><button type="button" class="sortbtn" id="sortSess" title="日期排序：目前新到舊，點一下切換成舊到新" aria-label="日期排序：目前新到舊，點一下切換成舊到新">日期<span class="arrow" aria-hidden="true">▼</span></button></th><th class="tl">星期</th><th class="tl">時段</th><th>時數</th><th title="實際計費／有效時數，休息時間不算">計費</th>
+              <th class="tl" id="thDate" aria-sort="descending"><button type="button" class="sortbtn" id="sortSess" title="日期排序：目前新到舊，點一下切換成舊到新" aria-label="日期排序：目前新到舊，點一下切換成舊到新">日期<span class="arrow" aria-hidden="true">▼</span></button></th><th class="tl">星期</th><th class="tl">時段</th><th>時數</th><th class="c-cost" title="實際計費／有效時數，休息時間不算">計費</th>
               <th class="tl">人員</th><th>等級</th><th>獲得%</th>
-              <th>每小時經驗</th><th>每小時%</th><th>費用</th><th class="tl">備註</th><th class="act"></th>
+              <th>每小時經驗</th><th>每小時%</th><th class="c-cost">費用</th><th class="tl">備註</th><th class="act"></th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -567,9 +573,13 @@
         <details class="tool">
           <summary>人員與時薪</summary>
           <div class="body">
+            <div class="costbox">
+              <label class="costlbl"><input type="checkbox" id="costToggle"><span>啟用「計費與成本」（進階）：記錄人員時薪與計費時數，計算費用與每百萬經驗成本</span></label>
+              <div class="costnote" id="costNote"></div>
+            </div>
             <div class="scroll">
               <table id="tblWorkerEdit">
-                <thead><tr><th class="tl">名稱</th><th>時薪</th><th>計費</th><th class="tl">備註</th><th class="act"></th></tr></thead>
+                <thead><tr><th class="tl">名稱</th><th class="c-cost">時薪</th><th class="c-cost">計費</th><th class="tl">備註</th><th class="act"></th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -773,6 +783,7 @@ let focusId = null;          // 新增後要跳到那一筆所在的頁
 let tab = "main";            // 頁籤：main（練功記錄）| daily（每日進度）| plan（練功計畫）
 let dayPage = 1;             // 每日進度頁的分頁，跟記錄頁分開
 let dayPageSize = 20;
+let costPref = null;         // 「計費與成本」模組：null＝未設定（自動判斷）| "on" | "off"（S6A-MOD-20261009）
 let dateOrder = "desc";      // 日期顯示順序（S4A-SORT-20261008）：desc 新到舊（預設）| asc 舊到新。只是 UI 偏好，記錄表與每日進度頁共用
 let planPage = 0;            // 練功計畫頁的目前頁，跟其他頁各自獨立；0＝尚未決定，renderPlan 會翻到「包含今天」的那頁
 let planPageSize = 14;       // 7／14／30 天
@@ -783,9 +794,10 @@ try{
   else if(ui.tab === "plan") tab = "plan";
   if([10,20,50].includes(+ui.dayPageSize)) dayPageSize = +ui.dayPageSize;
   if([7,14,30].includes(+ui.planPageSize)) planPageSize = +ui.planPageSize;
+  if(ui.cost === "on" || ui.cost === "off") costPref = ui.cost;      // 其他值＝未設定
   if(ui.order === "asc") dateOrder = "asc";      // 只認 "asc"；缺少或其他值一律是預設的 desc
 }catch(e){}
-function persistUI(){ try{ localStorage.setItem(UI_KEY, JSON.stringify({pageSize, tab, dayPageSize, planPageSize, order: dateOrder})); }catch(e){} }
+function persistUI(){ try{ localStorage.setItem(UI_KEY, JSON.stringify({pageSize, tab, dayPageSize, planPageSize, order: dateOrder, cost: costPref || undefined})); }catch(e){} }
 
 /* 讀不出原本的資料時，不能默默換成示範資料 —— 使用者一操作就會存檔，把原本的資料蓋掉。
    原文另外備份到 :unreadable，並暫停自動儲存，直到使用者自己匯入、還原示範資料或清空。 */
@@ -1095,6 +1107,25 @@ function setOrder(v){
   page = 1; dayPage = 1;
   persistUI(); render();
 }
+/* ---------- 可選模組：計費與成本（S6A-MOD-20261009）----------
+   預設關。有效狀態：偏好 costPref 是 "on"／"off" 就照它；沒設定時自動判斷——資料裡有任一人員 billable === true 或
+   時薪 > 0，或任一記錄的 billableHours 不是 null，就開（既有使用者的畫面不變）。
+   關閉只隱藏顯示（body.cost-off + .c-cost）：資料、計算、匯出、同步全部不變。 */
+function costAuto(){
+  try{
+    for(const w of (Array.isArray(db.workers) ? db.workers : [])) if(isPlainObj(w) && (w.billable === true || fin(w.hourlyRate) > 0)) return true;
+    for(const x of (Array.isArray(db.sessions) ? db.sessions : [])) if(isPlainObj(x) && x.billableHours != null && x.billableHours !== "") return true;
+  }catch(e){}
+  return false;
+}
+function costOn(){ return costPref === "on" ? true : costPref === "off" ? false : costAuto(); }
+function applyCost(){
+  const on = costOn();
+  document.body.classList.toggle("cost-off", !on);
+  document.getElementById("costToggle").checked = on;
+  document.getElementById("costNote").textContent = costPref ? "目前：依你的設定"
+    : on ? "目前：自動開啟（資料中有計費人員或計費時數）" : "目前：預設關閉";
+}
 /* 只有勾了「啟用」的記錄才列入統計 */
 const isOn = s => s.enabled !== false;
 function activeSorted(){ return sorted().filter(isOn); }
@@ -1120,6 +1151,7 @@ function hhmm(v){
 /* ---------- render ---------- */
 function render(){
   document.getElementById("docTitle").textContent = db.meta.title || "練功記錄";
+  applyCost();
   renderHero(); renderWorkers(); renderSessions();
   renderWorkerEdit(); renderLevels(); fillWorkerSelect();
   try{ renderDaily(); }
@@ -1188,14 +1220,14 @@ function renderHero(){
   stats.innerHTML = [
     ["本級時速", fmt0(th? tu/th:0), "exp/hr", true],
     ["本級投入", fmt1(th), `小時 · ${fmt1(th/24)} 天`, false],
-    ["本級花費", fmt0(tc), db.meta.currency||"", false],
-    ["累計花費", fmt0(allDv.reduce((a,d)=>a+d.cost,0)), db.meta.currency||"", false]
-  ].map(([k,v,u,gold])=>
-    `<div class="stat"><div class="v${gold?" gold":""}">${esc(v)} <span class="u">${esc(u)}</span></div><div class="k">${esc(k)}</div></div>`
+    ["本級花費", fmt0(tc), db.meta.currency||"", false, true],
+    ["累計花費", fmt0(allDv.reduce((a,d)=>a+d.cost,0)), db.meta.currency||"", false, true]
+  ].map(([k,v,u,gold,cost])=>
+    `<div class="stat${cost?" c-cost":""}"><div class="v${gold?" gold":""}">${esc(v)} <span class="u">${esc(u)}</span></div><div class="k">${esc(k)}</div></div>`
   ).join("");
   // 天數是純單位換算（時數 ÷ 24），不是日曆天數
   const inv = stats.querySelectorAll(".stat")[1];
-  if(inv) inv.title = `計費時數 ${fmt1(th)} 小時 ÷ 24 = ${fmt2(th/24)} 天，等於幾天的全天候練功；不是日曆天數`;
+  if(inv) inv.title = `${costOn() ? "計費時數" : "時數"} ${fmt1(th)} 小時 ÷ 24 = ${fmt2(th/24)} 天，等於幾天的全天候練功；不是日曆天數`;
 
   const used = [...new Set(cur.map(s=>s.workerId))];
   legend.innerHTML = used.map(id=>
@@ -1234,16 +1266,16 @@ function renderWorkers(){
       <td>${fmt0(r.units)}</td>
       <td class="${r.uph===bestUph?"best":""}">${fmt0(r.uph)}</td>
       <td>${fmt4(r.pph)}</td>
-      <td>${fmt0(r.cost)}</td>
-      <td class="${r.cpm&&r.cpm===bestCpm?"best":(r.cpm&&r.cpm===worstCpm?"worst":"")}">${r.cpm?fmt0(r.cpm):"—"}</td>
+      <td class="c-cost">${fmt0(r.cost)}</td>
+      <td class="c-cost ${r.cpm&&r.cpm===bestCpm?"best":(r.cpm&&r.cpm===worstCpm?"worst":"")}">${r.cpm?fmt0(r.cpm):"—"}</td>
     </tr>`).join("");
 
   const H=rows.reduce((a,r)=>a+r.hours,0), P=rows.reduce((a,r)=>a+r.pct,0),
         U=rows.reduce((a,r)=>a+r.units,0), C=rows.reduce((a,r)=>a+r.cost,0);
   tf.innerHTML = `<tr>
     <td class="tl">合計</td><td>${fmt1(H)}</td><td>${fmt4(P)}</td><td>${fmt0(U)}</td>
-    <td>${fmt0(H?U/H:0)}</td><td>${fmt4(H?P/H:0)}</td><td>${fmt0(C)}</td>
-    <td>${U?fmt0(C/(U/1e6)):"—"}</td></tr>`;
+    <td>${fmt0(H?U/H:0)}</td><td>${fmt4(H?P/H:0)}</td><td class="c-cost">${fmt0(C)}</td>
+    <td class="c-cost">${U?fmt0(C/(U/1e6)):"—"}</td></tr>`;
 }
 
 function renderSessions(){
@@ -1277,13 +1309,13 @@ function renderSessions(){
       <td class="tl">${weekday(s.date)}</td>
       <td class="tl">${hhmm(s.start)}–${hhmm(s.end)}</td>
       <td>${fmt1(d.hours)}</td>
-      <td class="bh${d.adjusted?' adj':''}"${d.adjusted?` title="時段 ${fmt1(d.hours)}H，扣掉休息實際計費 ${fmt1(d.billHours)}H"`:''}>${fmt1(d.billHours)}</td>
+      <td class="c-cost bh${d.adjusted?' adj':''}"${d.adjusted?` title="時段 ${fmt1(d.hours)}H，扣掉休息實際計費 ${fmt1(d.billHours)}H"`:''}>${fmt1(d.billHours)}</td>
       <td class="tl"><span class="who"><i style="background:${colorOf(s.workerId)}"></i>${esc(d.worker?d.worker.name:"?")}</span></td>
       <td>${esc(s.level)}${d.estimated?'<span class="est" title="該等級經驗為推估值">推</span>':""}</td>
       <td>${fmt4(s.gainedPct)}</td>
       <td>${d.required?fmt0(d.unitsPerHour):'<span style="color:var(--crimson)">未登錄</span>'}</td>
       <td>${fmt4(d.pctPerHour)}</td>
-      <td>${fmt0(d.cost)}</td>
+      <td class="c-cost">${fmt0(d.cost)}</td>
       <td class="tl note">${esc(s.note||"")}</td>
       <td class="act"><span class="rowact">
         <button class="sm ghost" data-edit="${esc(s.id)}">改</button>
@@ -1351,8 +1383,8 @@ function renderWorkerEdit(){
   tb.innerHTML = db.workers.map(w=>`
     <tr>
       <td class="tl"><input data-w="${esc(w.id)}" data-k="name" value="${esc(w.name)}" style="width:120px"></td>
-      <td><input data-w="${esc(w.id)}" data-k="hourlyRate" type="number" step="any" value="${esc(w.hourlyRate)}" style="width:90px"></td>
-      <td><input data-w="${esc(w.id)}" data-k="billable" type="checkbox" ${w.billable?"checked":""} style="width:auto"></td>
+      <td class="c-cost"><input data-w="${esc(w.id)}" data-k="hourlyRate" type="number" step="any" value="${esc(w.hourlyRate)}" style="width:90px"></td>
+      <td class="c-cost"><input data-w="${esc(w.id)}" data-k="billable" type="checkbox" ${w.billable?"checked":""} style="width:auto"></td>
       <td class="tl"><input data-w="${esc(w.id)}" data-k="note" value="${esc(w.note||"")}" style="width:150px"></td>
       <td class="act"><button class="sm ghost danger" data-delw="${esc(w.id)}">刪</button></td>
     </tr>`).join("");
@@ -1388,7 +1420,8 @@ function syncBhField(){
   const wrap = document.getElementById("f-bh-wrap");
   // 找不到的人員（見 fillWorkerSelect），或正在修改的記錄沒有人員：不知道是不是計費的，
   // 欄位照樣顯示，不然會把記錄原本的計費時數清掉
-  const show = w ? !!w.billable : (id !== "" || !!editingId);
+  // 模組關閉時一律不顯示（儲存時保留修改中那筆原本的計費時數，見 readForm）
+  const show = costOn() && (w ? !!w.billable : (id !== "" || !!editingId));
   wrap.hidden = !show;
   if(!show){ document.getElementById("f-bh").value = ""; return; }
   const a = parseFloat(document.getElementById("f-start").value);
@@ -1423,6 +1456,9 @@ function formMsg(t, cls){
   el.textContent = t || ""; el.className = "msg" + (cls? " "+cls : "");
 }
 function readForm(){
+  // 計費與成本模組關閉時 #f-bh 看不到也是空的：修改記錄時要保留原本的計費時數，不能因為隱藏就清掉
+  const cur = editingId ? db.sessions.find(x=>x.id===editingId) : null;
+  const keepBh = !costOn() ? (cur && cur.billableHours !== undefined ? cur.billableHours : null) : undefined;
   return {
     date: document.getElementById("f-date").value,
     start: parseFloat(document.getElementById("f-start").value),
@@ -1430,7 +1466,7 @@ function readForm(){
     workerId: document.getElementById("f-worker").value,
     level: parseInt(document.getElementById("f-level").value,10),
     gainedPct: parseFloat(document.getElementById("f-pct").value),
-    billableHours: (v=>v===""?null:(isFinite(parseFloat(v))?parseFloat(v):null))(document.getElementById("f-bh").value.trim()),
+    billableHours: keepBh !== undefined ? keepBh : (v=>v===""?null:(isFinite(parseFloat(v))?parseFloat(v):null))(document.getElementById("f-bh").value.trim()),
     note: document.getElementById("f-note").value.trim()
   };
 }
@@ -1446,7 +1482,7 @@ function validate(v){
   }
   if(!isFinite(v.level)) return "填等級";
   if(!isFinite(v.gainedPct)) return "填獲得 %";
-  if(v.billableHours!==null && v.billableHours<0) return "計費時數不能是負的";
+  if(costOn() && v.billableHours!==null && v.billableHours<0) return "計費時數不能是負的";
   return null;
 }
 document.getElementById("btnSave").addEventListener("click", ()=>{
@@ -1566,7 +1602,7 @@ document.querySelector("#tblWorkerEdit").addEventListener("click", e=>{
   const name = w && safeStr(w.name).trim() || "（未命名）";
   const used = db.sessions.filter(s=>s.workerId===id).length;
   // 費用要靠人員的時薪（見 derive），可計費的人員刪掉後，他那些記錄的費用會變成 0
-  const paid = w && w.billable && num(w.hourlyRate);
+  const paid = costOn() && w && w.billable && num(w.hourlyRate);
   if(!confirm(used
     ? `刪除人員「${name}」？\n這位人員有 ${used} 筆記錄，刪除後那些記錄會找不到人員`
       + (paid ? "，費用也會變成 0（累計花費跟著減少）。" : "。")
@@ -1575,7 +1611,7 @@ document.querySelector("#tblWorkerEdit").addEventListener("click", e=>{
   persist(); render();
 });
 document.getElementById("btnAddWorker").addEventListener("click", ()=>{
-  db.workers.push({id:"w"+Date.now(),name:"新人員",hourlyRate:0,billable:true,note:""});
+  db.workers.push({id:"w"+Date.now(),name:"新人員",hourlyRate:0,billable:costOn(),note:""});    // 模組關閉時新人員不計費（照舊：開啟時預設計費）
   persist(); render();
 });
 
@@ -2444,6 +2480,11 @@ document.getElementById("btnCloudUnlink").addEventListener("click", () => {
     : "。這次沒有撤銷 Google 的存取權限，要撤銷請到 Google 帳戶的「第三方應用程式和服務」移除"));
 });
 
+document.getElementById("costToggle").addEventListener("change", e=>{
+  costPref = e.target.checked ? "on" : "off";     // 使用者按過之後存成明確的設定；不動 db
+  persistUI(); render();
+});
+
 /* ---------- 頁籤 ---------- */
 function applyTab(){
   document.getElementById("pageMain").hidden = tab !== "main";
@@ -2617,7 +2658,7 @@ function dayRowHtml(r){
     return `<tr class="dayrow nodata">
       <td class="tl d-date">${md}</td><td class="tl d-week">${wk}</td><td class="d-lv">—</td>
       <td class="tlcell"><div class="track"><span class="norec">無記錄</span></div></td>
-      <td class="d-pct"></td><td class="d-cum"></td><td class="d-exp"></td><td class="d-cost"></td><td class="d-hrs"></td>
+      <td class="d-pct"></td><td class="d-cum"></td><td class="d-exp"></td><td class="d-cost c-cost"></td><td class="d-hrs c-cost"></td>
     </tr>`;
   }
   const lvName = l => Number.isFinite(l) ? String(l) : "?";
@@ -2649,8 +2690,8 @@ function dayRowHtml(r){
     <td class="d-pct">${pct}</td>
     <td class="d-cum">${cum}</td>
     <td class="d-exp">${allOff ? "" : fmt0(r.units)}</td>
-    <td class="d-cost">${allOff ? "" : fmt0(r.cost)}</td>
-    <td class="d-hrs">${allOff ? "" : fmt1(r.billHours)}</td>
+    <td class="d-cost c-cost">${allOff ? "" : fmt0(r.cost)}</td>
+    <td class="d-hrs c-cost">${allOff ? "" : fmt1(r.billHours)}</td>
   </tr>`;
 }
 
@@ -2692,7 +2733,7 @@ function renderDaily(){
           <th class="tlcell"><div class="axis">
             <span style="left:0">0</span><span style="left:25%">6</span><span style="left:50%">12</span><span style="left:75%">18</span><span style="left:100%">24</span>
           </div></th>
-          <th>獲得%</th><th title="當天結束時該等級已累積的 %。已經升級卻累積不到 100% 的等級標「缺」，代表有時段沒登錄">當前%</th><th>獲得經驗</th><th>花費</th><th title="實際計費／有效時數，休息時間不算">計費時數</th>
+          <th>獲得%</th><th title="當天結束時該等級已累積的 %。已經升級卻累積不到 100% 的等級標「缺」，代表有時段沒登錄">當前%</th><th>獲得經驗</th><th class="c-cost">花費</th><th class="c-cost" title="實際計費／有效時數，休息時間不算">計費時數</th>
         </tr></thead>
         <tbody>${slice.map(dayRowHtml).join("")}</tbody>
       </table>
