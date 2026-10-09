@@ -608,7 +608,8 @@
       <p class="foot">
         每小時經驗 = 獲得% ÷ 100 × 該等級升級經驗 ÷ 時數。<br>
         時段跨午夜直接填（23 到 5），時數會算成 6。中途升級請拆成兩筆分別填等級。<br>
-        紅字等級為推估值，覆蓋成實測值後所有歷史記錄會一起修正。
+        紅字等級為推估值，覆蓋成實測值後所有歷史記錄會一起修正。<br>
+        示範資料裡的等級經驗是作者自己的測值與推估值，可能已因改版過期，請以自己的實測為準並自行修改。
       </p>
     </div>
   </div>
@@ -722,7 +723,7 @@
   </div><!-- /pagePlan -->
 
   <footer class="sitefoot" id="siteFoot">
-    <p>Grind Log 是玩家自製的練功記錄工具，與天堂的開發商、營運商沒有任何關係；不連接遊戲、不讀取遊戲資料；資料只存在你自己的瀏覽器（可選擇同步到你自己的 Google 雲端硬碟）。</p>
+    <p>Grind Log 是玩家自製的練功記錄工具，與天堂的開發商、營運商沒有任何關係；「天堂」為其權利人所有的商標，本工具僅作描述性提及，並非官方產品；不連接遊戲、不讀取遊戲資料；資料只存在你自己的瀏覽器（可選擇同步到你自己的 Google 雲端硬碟）。</p>
     <p><a href="privacy.html" target="_blank" rel="noopener">隱私權政策</a><span id="donateWrap" hidden>・<a id="donateLink" target="_blank" rel="noopener noreferrer">支持作者</a></span></p>
   </footer>
 </div>
@@ -772,7 +773,7 @@ function seed(){
   return {
     schema:"grind-log/v1",
     meta:{title:"天堂經典版 練功記錄",unit:"exp",currency:"TWD",updatedAt:new Date().toISOString()},
-    levels:L.map(([level,required,confidence])=>({level,required,confidence,note:confidence==="estimated"?(level===54?"鬼魂比值 x6":"x1.10 外推"):""})),
+    levels:L.map(([level,required,confidence])=>({level,required,confidence,note:confidence==="estimated"?(level===54?"Lv54 為作者推估，與前一級差距很大，僅供參考":"作者推估（示範，僅供參考）"):"作者測值（示範）"})),
     workers:[
       {id:"me",  name:"我",   hourlyRate:0, billable:false, note:"主要角色"},
       {id:"alt", name:"小號", hourlyRate:0, billable:false, note:"第二個角色"}
@@ -786,6 +787,7 @@ function seed(){
 let loadProblem = null;
 let db = load();
 let editingId = null;
+let bhCleared = false;       // S6A4-FIX-20261009：修改記錄時，使用者「換人員」換成不計費的人而清掉了 #f-bh（跟以前一樣）；其他原因的隱藏不清值
 
 /* 分頁狀態：只是 UI 偏好，跟資料分開存 */
 const UI_KEY = STORE_KEY + ":ui";
@@ -1135,8 +1137,9 @@ function applyCost(){
   const on = costOn();
   document.body.classList.toggle("cost-off", !on);
   document.getElementById("costToggle").checked = on;
-  document.getElementById("costNote").textContent = costPref ? "目前：依你的設定"
-    : on ? "目前：自動開啟（資料中有計費人員或計費時數）" : "目前：預設關閉";
+  document.getElementById("costNote").textContent = (costPref ? "目前：依你的設定"
+    : on ? "目前：自動開啟（資料中有計費人員或計費時數）" : "目前：預設關閉")
+    + (!on && costAuto() ? "。資料中有計費設定，目前隱藏" : "");     // S6A4-FIX-20261009
 }
 /* 頁尾的「支持作者」：DONATE_URL 是 https:// 開頭的非空字串才顯示 */
 function renderFooter(){
@@ -1434,7 +1437,7 @@ function renderLevels(){
 }
 
 /* 計費時數只對「計費」的人員有意義，其他人隱藏這一欄 */
-function syncBhField(){
+function syncBhField(userChange){
   const id = document.getElementById("f-worker").value;
   const w = workerOf(id);
   const wrap = document.getElementById("f-bh-wrap");
@@ -1443,13 +1446,19 @@ function syncBhField(){
   // 模組關閉時一律不顯示（儲存時保留修改中那筆原本的計費時數，見 readForm）
   const show = costOn() && (w ? !!w.billable : (id !== "" || !!editingId));
   wrap.hidden = !show;
-  if(!show){ document.getElementById("f-bh").value = ""; return; }
+  if(!show){
+    // S6A4-FIX-20261009：只有使用者自己換了人員（userChange）才清空，跟以前的行為一樣；
+    // 模組開關、重畫、在「人員與時薪」取消人員的計費這些隱藏原因都保留欄位的值，
+    // 否則編輯中切換一下就會把記錄原本的計費時數存成空值（費用與效率跟著變）
+    if(userChange){ document.getElementById("f-bh").value = ""; if(editingId) bhCleared = true; }
+    return;
+  }
   const a = parseFloat(document.getElementById("f-start").value);
   const b = parseFloat(document.getElementById("f-end").value);
   const span = (isFinite(a)&&isFinite(b)) ? (b>=a ? b-a : b+24-a) : null;
   document.getElementById("f-bh").placeholder = span===null ? "同時段" : fmt1(span);
 }
-document.getElementById("f-worker").addEventListener("change", syncBhField);
+document.getElementById("f-worker").addEventListener("change", ()=>syncBhField(true));
 document.getElementById("f-start").addEventListener("input", syncBhField);
 document.getElementById("f-end").addEventListener("input", syncBhField);
 
@@ -1477,8 +1486,11 @@ function formMsg(t, cls){
 }
 function readForm(){
   // 計費與成本模組關閉時 #f-bh 看不到也是空的：修改記錄時要保留原本的計費時數，不能因為隱藏就清掉
+  // S6A4-FIX-20261009：欄位隱藏時（模組關閉、或選的人員不計費）——新增記錄是 null；修改記錄沿用欄位裡保留的值
+  // （載入時填進去的原值，或使用者在顯示時改過的值），除非使用者自己換人員把它清掉了（bhCleared）
   const cur = editingId ? db.sessions.find(x=>x.id===editingId) : null;
-  const keepBh = !costOn() ? (cur && cur.billableHours !== undefined ? cur.billableHours : null) : undefined;
+  const hiddenBh = document.getElementById("f-bh-wrap").hidden;
+  const keepNull = hiddenBh && (!cur || bhCleared);
   return {
     date: document.getElementById("f-date").value,
     start: parseFloat(document.getElementById("f-start").value),
@@ -1486,7 +1498,7 @@ function readForm(){
     workerId: document.getElementById("f-worker").value,
     level: parseInt(document.getElementById("f-level").value,10),
     gainedPct: parseFloat(document.getElementById("f-pct").value),
-    billableHours: keepBh !== undefined ? keepBh : (v=>v===""?null:(isFinite(parseFloat(v))?parseFloat(v):null))(document.getElementById("f-bh").value.trim()),
+    billableHours: keepNull ? null : (v=>v===""?null:(isFinite(parseFloat(v))?parseFloat(v):null))(document.getElementById("f-bh").value.trim()),
     note: document.getElementById("f-note").value.trim()
   };
 }
@@ -1557,7 +1569,7 @@ document.querySelector("#tblSessions tbody").addEventListener("click", e=>{
   if(ed){
     const s = db.sessions.find(x=>x.id===ed.dataset.edit);
     if(!s) return;
-    editingId = s.id;
+    editingId = s.id; bhCleared = false;
     document.getElementById("f-date").value = s.date;
     document.getElementById("f-start").value = s.start;
     document.getElementById("f-end").value = s.end;
@@ -1772,6 +1784,7 @@ document.getElementById("btnDownloadRaw").addEventListener("click", ()=>{
 /* 離開修改模式（取消、存好、刪掉那筆、換了整份資料）時把表單改回「新增記錄」——
    editingId 已經清掉，表單還停在「儲存修改」的話，再按會變成新增一筆 */
 function resetEditUI(){
+  bhCleared = false;
   document.getElementById("btnSave").textContent = "新增記錄";
   document.getElementById("btnCancel").hidden = true;
   formMsg("");
@@ -2660,8 +2673,9 @@ function segHtml(s){
   const tip = [
     `${hhmm(a)}–${hhmm(b)}${cross ? "（跨午夜到翌日）" : ""}　${d.worker ? d.worker.name : "?"}`,
     `lv${Number.isFinite(lvOf(s)) ? lvOf(s) : "?"}　${pctOf(s) < 0 ? "" : "+"}${fmt4(pctOf(s))}%`,
-    d.adjusted ? `時段 ${fmt1(d.hours)}H／計費 ${fmt1(d.billHours)}H` : `${fmt1(d.hours)}H`,
-    d.cost ? `費用 ${fmt0(d.cost)}` : "",
+    // S6A4-FIX-20261009：「計費與成本」關閉時不洩漏計費時數與費用（開啟時跟以前逐位相同）
+    d.adjusted && costOn() ? `時段 ${fmt1(d.hours)}H／計費 ${fmt1(d.billHours)}H` : `${fmt1(d.hours)}H`,
+    d.cost && costOn() ? `費用 ${fmt0(d.cost)}` : "",
     s.note ? `備註：${s.note}` : "",
     on ? "" : "已停用，不列入統計"
   ].filter(Boolean).join("\n");

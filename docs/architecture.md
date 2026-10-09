@@ -110,6 +110,7 @@ header.top（#docTitle、#saveState）
 | `editingId` | 表單正在修改的記錄 id；`null` 代表新增模式 |
 | `saveTimer` | 存檔狀態訊息 2.2 秒後消失的計時器 |
 | `page`、`pageSize` | 記錄表的目前頁與每頁筆數（10／20／50） |
+| `bhCleared` | 修改記錄時，使用者自己換人員成不計費者而清掉了 `#f-bh`（`syncBhField(true)`）；`readForm()` 用它判斷隱藏的 `#f-bh` 要存 `null` 還是沿用保留的值。`resetEditUI()` 與按「改」時重置 |
 | `costPref` | 「計費與成本」模組的偏好：`null`（未設定，依資料自動判斷）、`"on"`、`"off"`；存在 UI key 的 `cost`（未設定時不寫入）。`costOn()` 是有效狀態，`render()` 開頭的 `applyCost()` 在 `document.body` 加／拿掉 `cost-off`；各表格相關的 th／td 帶 `c-cost`，CSS 隱藏。見 [features/cost-module.md](features/cost-module.md) |
 | `dateOrder` | 日期顯示順序 `"desc"`（新到舊，預設）或 `"asc"`；記錄表與每日進度頁共用；存在 UI key 的 `order`，只認 `"asc"`。`sessionOrder()` 依它決定記錄表的顯示順序，`dailyShown()` 決定每日進度頁的；`sorted()` 不受影響 |
 | `focusId` | 剛新增的記錄 id，重畫時翻到它所在的頁，用完清掉 |
