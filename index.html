@@ -734,17 +734,16 @@ function seed(){
     [50,50638298,"measured"],[51,55348837,"measured"],[52,61025641,"measured"],
     [53,67128205,"estimated"],[54,402769230,"estimated"]
   ];
-  // 示範資料。要放自己的記錄，用「匯入 JSON」載入，或直接改這裡。
+  // 示範資料（S6A-MOD-20261009：中性，不含計費人員）。要放自己的記錄，用「匯入 JSON」載入，或直接改這裡。
   const S = [
     {date:"2026-09-01", start:7,  end:10, workerId:"me",   level:51, gainedPct:2},
-    {date:"2026-09-01", start:10, end:18, workerId:"hire", level:51, gainedPct:9,
-     billableHours:7, note:"時段 8 小時，中間休息 1 小時不計費"},
+    {date:"2026-09-01", start:10, end:18, workerId:"alt",  level:51, gainedPct:9, note:"第二個角色的示範記錄"},
     {date:"2026-09-01", start:18, end:24, workerId:"me",   level:51, gainedPct:5},
     {date:"2026-09-02", start:7,  end:10, workerId:"me",   level:51, gainedPct:2.5, note:"維修延長"},
-    {date:"2026-09-02", start:10, end:18, workerId:"hire", level:51, gainedPct:9, billableHours:7},
+    {date:"2026-09-02", start:10, end:18, workerId:"alt",  level:51, gainedPct:9},
     {date:"2026-09-02", start:23, end:5,  workerId:"me",   level:51, gainedPct:4,
      note:"跨午夜直接填 23 到 5，時數自動算 6"},
-    {date:"2026-09-03", start:10, end:18, workerId:"hire", level:51, gainedPct:8.5, billableHours:7},
+    {date:"2026-09-03", start:10, end:18, workerId:"alt",  level:51, gainedPct:8.5},
     {date:"2026-09-03", start:18, end:24, workerId:"me",   level:51, gainedPct:3,
      enabled:false, note:"示範：取消「啟用」就不列入統計"}
   ];
@@ -753,8 +752,8 @@ function seed(){
     meta:{title:"天堂經典版 練功記錄",unit:"exp",currency:"TWD",updatedAt:new Date().toISOString()},
     levels:L.map(([level,required,confidence])=>({level,required,confidence,note:confidence==="estimated"?(level===54?"鬼魂比值 x6":"x1.10 外推"):""})),
     workers:[
-      {id:"me",   name:"我",   hourlyRate:0,   billable:false, note:"自己練，不計費"},
-      {id:"hire", name:"代練", hourlyRate:200, billable:true,  note:"日薪1600÷8h"}
+      {id:"me",  name:"我",   hourlyRate:0, billable:false, note:"主要角色"},
+      {id:"alt", name:"小號", hourlyRate:0, billable:false, note:"第二個角色"}
     ],
     sessions:S.map((s,i)=>Object.assign({id:"s"+(i+1), billableHours:null, enabled:true, note:""}, s))
   };
@@ -1030,7 +1029,7 @@ function hoursOf(s){
   if(!isFinite(a)||!isFinite(b)) return 0;
   return b >= a ? b - a : b + 24 - a;
 }
-/* 實際計費／有效時數。真人代練的時段含休息，休息既不計費也不產經驗，
+/* 實際計費／有效時數。有休息時間的計費人員（例如真人）的時段含休息，休息既不計費也不產經驗，
    所以費用和效率都用這個數字，不是用時段長度。沒填就等於時段長度。 */
 function billHoursOf(s){
   const b = s.billableHours;
@@ -2505,7 +2504,7 @@ function dayRow(date, ss){
     pctByLv.set(lv, (pctByLv.get(lv) ?? 0) + pctOf(s));
   }
   const levels = [...new Set(ss.map(lvOf).filter(Number.isFinite))].sort((a,b)=>a-b);
-  // 備註以「・」串接的會拆開去重，例如「代練公休・預估」和「預估」只留一次「預估」
+  // 備註以「・」串接的會拆開去重，例如「公休・預估」和「預估」只留一次「預估」
   const notes = [];
   for(const s of ss){
     for(const part of String(s.note||"").split("・")){
