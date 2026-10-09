@@ -67,13 +67,13 @@ header.top（#docTitle、#saveState）
 
 | 區段 | 主要內容 |
 |---|---|
-| 常數 | `WCOLORS`、`STORE_KEY`、`WEEK` |
+| 常數 | `WCOLORS`、`STORE_KEY`、`WEEK`、`DONATE_URL`（贊助連結位，空字串＝不顯示；只在 render 時用，`load()`／`normalize()` 路徑不用它） |
 | 示範資料 | `seed()` |
-| 狀態 | `loadProblem`、`db = load()`、`editingId`、`UI_KEY`、UI 狀態（`page`、`pageSize`、`focusId`、`tab`、`dayPage`、`dayPageSize`、`dateOrder`）、`persistUI()` |
+| 狀態 | `loadProblem`、`db = load()`、`editingId`、`UI_KEY`、UI 狀態（`page`、`pageSize`、`focusId`、`tab`、`dayPage`、`dayPageSize`、`dateOrder`、`costPref`）、`persistUI()` |
 | 載入 | `load()` |
 | 資料整理 | `safeStr`、`cleanId`、`isPlainObj`、`numField`、`normalize`、`normPlan` |
 | 儲存 | `persist()`、`saveTimer`、`setSaveState()` |
-| 計算 | `num`、`pctOf`、`numOrNaN`、`lvOf`、`hoursOf`、`billHoursOf`、`levelInfo`、`workerOf`、`colorOf`、`derive`、`startKey`、`byStart`、`sorted`、`sessionOrder`（顯示順序）、`orderInfo`、`syncOrderUI`、`setOrder`、`isOn`、`activeSorted` |
+| 計算 | `num`、`pctOf`、`numOrNaN`、`lvOf`、`hoursOf`、`billHoursOf`、`levelInfo`、`workerOf`、`colorOf`、`derive`、`startKey`、`byStart`、`sorted`、`sessionOrder`（顯示順序）、`orderInfo`、`syncOrderUI`、`setOrder`、`costAuto`／`costOn`／`applyCost`（計費與成本模組）、`renderFooter`、`isOn`、`activeSorted` |
 | 格式化 | `fin`、`fmt0`／`fmt1`／`fmt2`／`fmt4`、`weekday`、`esc`、`hhmm` |
 | 畫面 | `render`、`renderHero`、`renderWorkers`、`renderSessions`、`syncAllCb`、`pageList`、`renderPager`、`renderWorkerEdit`、`renderLevels`、`syncBhField`、`fillWorkerSelect` |
 | 表單 | `formMsg`、`readForm`、`validate`，以及儲存、取消的事件 |
@@ -110,6 +110,7 @@ header.top（#docTitle、#saveState）
 | `editingId` | 表單正在修改的記錄 id；`null` 代表新增模式 |
 | `saveTimer` | 存檔狀態訊息 2.2 秒後消失的計時器 |
 | `page`、`pageSize` | 記錄表的目前頁與每頁筆數（10／20／50） |
+| `costPref` | 「計費與成本」模組的偏好：`null`（未設定，依資料自動判斷）、`"on"`、`"off"`；存在 UI key 的 `cost`（未設定時不寫入）。`costOn()` 是有效狀態，`render()` 開頭的 `applyCost()` 在 `document.body` 加／拿掉 `cost-off`；各表格相關的 th／td 帶 `c-cost`，CSS 隱藏。見 [features/cost-module.md](features/cost-module.md) |
 | `dateOrder` | 日期顯示順序 `"desc"`（新到舊，預設）或 `"asc"`；記錄表與每日進度頁共用；存在 UI key 的 `order`，只認 `"asc"`。`sessionOrder()` 依它決定記錄表的顯示順序，`dailyShown()` 決定每日進度頁的；`sorted()` 不受影響 |
 | `focusId` | 剛新增的記錄 id，重畫時翻到它所在的頁，用完清掉 |
 | `tab` | 目前頁籤：`"main"`、`"daily"` 或 `"plan"` |
@@ -123,7 +124,7 @@ header.top（#docTitle、#saveState）
 | key | 內容 |
 |---|---|
 | `grind-log/v1` | 整份資料的 JSON |
-| `grind-log/v1:ui` | UI 偏好：`{pageSize, tab, dayPageSize, planPageSize, order}`（`tab` 可以是 `"plan"`；`planPageSize` 只認 7／14／30） |
+| `grind-log/v1:ui` | UI 偏好：`{pageSize, tab, dayPageSize, planPageSize, order, cost?}`（`tab` 可以是 `"plan"`；`planPageSize` 只認 7／14／30） |
 | `grind-log/v1:unreadable`、`grind-log/v1:unreadable-<時間戳>` | 讀不出來的原文備份，見 [features/storage-recovery.md](features/storage-recovery.md) |
 | `grind-log/v1:sync` | Google 試算表同步狀態：`{fileId, hash, dirty}`，見 [features/cloud-sync.md](features/cloud-sync.md) |
 | `grind-log/v1:local-backup` | 「用雲端的」取代這台之前另存的資料 `{savedAt, data}`，只有一份；一般下載不會蓋掉已有的備份，見 [features/cloud-sync.md](features/cloud-sync.md) |

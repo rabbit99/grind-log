@@ -399,6 +399,10 @@
   .costlbl{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--bone);cursor:pointer}
   .costlbl input{width:auto;padding:0;margin:3px 0 0;accent-color:var(--gold);flex:none}
   .costnote{font-size:11.5px;line-height:1.5;color:var(--bone-dim);margin:4px 0 0 24px}
+  /* S6A-MOD-20261009 頁尾：免責聲明、隱私權政策、贊助連結位。文字色 --bone-dim 在 --stone-900 上 ≥ 4.5:1 */
+  .sitefoot{margin-top:34px;padding-top:16px;border-top:1px solid var(--rule);font-size:12px;line-height:1.7;color:var(--bone-dim);overflow-wrap:anywhere;word-break:break-word}
+  .sitefoot p{margin:0 0 6px}
+  .sitefoot a{color:var(--gold)}
 </style>
 </head>
 <body>
@@ -716,6 +720,11 @@
       </details>
     </section>
   </div><!-- /pagePlan -->
+
+  <footer class="sitefoot" id="siteFoot">
+    <p>Grind Log 是玩家自製的練功記錄工具，與天堂的開發商、營運商沒有任何關係；不連接遊戲、不讀取遊戲資料；資料只存在你自己的瀏覽器（可選擇同步到你自己的 Google 雲端硬碟）。</p>
+    <p><a href="privacy.html" target="_blank" rel="noopener">隱私權政策</a><span id="donateWrap" hidden>・<a id="donateLink" target="_blank" rel="noopener noreferrer">支持作者</a></span></p>
+  </footer>
 </div>
 
 <dialog class="cloudask" id="cloudDialog" aria-labelledby="cloudAskTitle" aria-describedby="cloudAskText">
@@ -734,6 +743,9 @@
 const WCOLORS = ["var(--w1)","var(--w2)","var(--w3)","var(--w4)","var(--w5)","var(--w6)"];
 const STORE_KEY = "grind-log/v1";
 const WEEK = ["週日","週一","週二","週三","週四","週五","週六"];
+/* 贊助連結位（S6A-MOD-20261009）：頁尾「支持作者」的網址。保持空字串＝不顯示；收款管道由作者另行提供後才填。
+   只有 https:// 開頭的才會顯示（http:、javascript: 等一律不顯示）。純外部連結，不載入任何外部腳本。 */
+const DONATE_URL = "";
 
 /* ---------- seed data ---------- */
 function seed(){
@@ -1126,6 +1138,13 @@ function applyCost(){
   document.getElementById("costNote").textContent = costPref ? "目前：依你的設定"
     : on ? "目前：自動開啟（資料中有計費人員或計費時數）" : "目前：預設關閉";
 }
+/* 頁尾的「支持作者」：DONATE_URL 是 https:// 開頭的非空字串才顯示 */
+function renderFooter(){
+  const ok = typeof DONATE_URL === "string" && /^https:\/\/[^\s"'<>]+$/.test(DONATE_URL);
+  const a = document.getElementById("donateLink");
+  document.getElementById("donateWrap").hidden = !ok;
+  if(ok) a.href = DONATE_URL; else a.removeAttribute("href");
+}
 /* 只有勾了「啟用」的記錄才列入統計 */
 const isOn = s => s.enabled !== false;
 function activeSorted(){ return sorted().filter(isOn); }
@@ -1152,6 +1171,7 @@ function hhmm(v){
 function render(){
   document.getElementById("docTitle").textContent = db.meta.title || "練功記錄";
   applyCost();
+  renderFooter();
   renderHero(); renderWorkers(); renderSessions();
   renderWorkerEdit(); renderLevels(); fillWorkerSelect();
   try{ renderDaily(); }
